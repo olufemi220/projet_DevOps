@@ -1,0 +1,26 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: mysql-student
+    restart: always
+    environment:
+      MYSQL_DATABASE: student_db
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./student-project/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  backend-csharp:
+    build:
+      context: ./student-project/backend-csharp/StudentApi
+      dockerfile: Dockerfile
+      network: host
+    container_name: backend-csharp
+    ports:
+      - "5020:5000"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=server=db;port=3306;database=student_db;user=root;password=root
+    depends_on:
+      - db

@@ -1,0 +1,25 @@
+name: Backend C# CI
+
+on:
+  push:
+    branches: [ "main", "feature/backend-csharp" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: 7.0.x
+
+    - name: Restore
+      run: dotnet restore ./student-project/backend-csharp/StudentApi/StudentApi.csproj
+
+    - name: Build
+      run: dotnet build ./student-project/backend-csharp/StudentApi/StudentApi.csproj --no-restore -c Release

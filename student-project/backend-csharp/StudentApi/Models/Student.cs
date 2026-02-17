@@ -1,10 +1,8 @@
 using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel.DataAnnotations.Schema; // <--- CETTE LIGNE EST VITALE
 
 namespace StudentApi.Models;
 
-// This model represents the Student entity in the MySQL database
-// Table name is forced to lowercase to match the Docker initialization script
 [Table("students")]
 public class Student
 {
