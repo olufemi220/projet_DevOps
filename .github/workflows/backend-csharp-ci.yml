@@ -3,9 +3,12 @@ name: Backend C# CI/CD
 on:
   push:
     branches: [ "main", "feature/backend-csharp" ]
+  pull_request:
+    branches: [ "main" ]
 
 env:
   REGISTRY: ghcr.io
+  # On force le nom en minuscules pour éviter les erreurs de rejet de GitHub
   IMAGE_NAME: ${{ github.repository }}-backend
 
 jobs:
@@ -24,14 +27,14 @@ jobs:
         with:
           dotnet-version: 7.0.x
 
-      # 1. Compilation et Tests
+      # 1. Vérification du code (CI)
       - name: Restore dependencies
         run: dotnet restore ./student-project/backend-csharp/StudentApi/StudentApi.csproj
 
       - name: Build
         run: dotnet build ./student-project/backend-csharp/StudentApi/StudentApi.csproj --no-restore -c Release
 
-      # 2. Connexion au registre GitHub (GHCR)
+      # 2. Préparation Docker (CD)
       - name: Log in to the Container registry
         uses: docker/login-action@v2
         with:
@@ -39,10 +42,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 3. Construction et Publication de l'image Docker
+      # 3. Construction et Publication de l'image
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
+          # Le context doit pointer vers le dossier racine du projet C#
           context: ./student-project/backend-csharp/StudentApi
+          file: ./student-project/backend-csharp/StudentApi/Dockerfile
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          # On génère le tag en minuscules pour GHCR
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/projet-devops-backend:latest
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/projet-devops-backend:${{ github.sha }}
