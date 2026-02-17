@@ -1,25 +1,48 @@
-name: Backend C# CI
+name: Backend C# CI/CD
 
 on:
   push:
     branches: [ "main", "feature/backend-csharp" ]
-  pull_request:
-    branches: [ "main" ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}-backend
 
 jobs:
-  build:
+  build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
     steps:
-    - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v3
-      with:
-        dotnet-version: 7.0.x
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 7.0.x
 
-    - name: Restore
-      run: dotnet restore ./student-project/backend-csharp/StudentApi/StudentApi.csproj
+      # 1. Compilation et Tests
+      - name: Restore dependencies
+        run: dotnet restore ./student-project/backend-csharp/StudentApi/StudentApi.csproj
 
-    - name: Build
-      run: dotnet build ./student-project/backend-csharp/StudentApi/StudentApi.csproj --no-restore -c Release
+      - name: Build
+        run: dotnet build ./student-project/backend-csharp/StudentApi/StudentApi.csproj --no-restore -c Release
+
+      # 2. Connexion au registre GitHub (GHCR)
+      - name: Log in to the Container registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 3. Construction et Publication de l'image Docker
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./student-project/backend-csharp/StudentApi
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
