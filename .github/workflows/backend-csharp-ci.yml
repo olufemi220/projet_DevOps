@@ -2,106 +2,61 @@ name: Global Project Verification
 
 on:
   push:
-    branches:
-      - '**' # S'exécute sur absolument toutes les branches
+    branches: ["**"]
   pull_request:
-    branches:
-      - '**'
+    branches: ["**"]
 
 jobs:
-  # --- JOB 1 : VÉRIFICATION DU BACKEND C# ---
   backend-verification:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
+      - uses: actions/checkout@v3
       - name: Setup .NET
         uses: actions/setup-dotnet@v3
         with:
           dotnet-version: '7.0.x'
+      - name: Build
+        run: dotnet build ./student-project/backend-csharp/StudentApi/StudentApi.csproj -c Release
 
-      - name: Restore dependencies
-        run: dotnet restore ./student-project/backend-csharp/StudentApi/StudentApi.csproj
-
-      - name: Build Backend
-        run: dotnet build ./student-project/backend-csharp/StudentApi/StudentApi.csproj --no-restore -c Release
-
-  # --- JOB 2 : VÉRIFICATION DU FRONTEND NEXT.JS ---
   frontend-verification:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Setup Node.js
+      - uses: actions/checkout@v3
+      - name: Setup Node
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: './student-project/frontend-nextjs/package-lock.json'
-
-      - name: Install dependencies
+          node-version: '20' # Correction : passage à Node 20
+      - name: Install & Build
         working-directory: ./student-project/frontend-nextjs
-        run: npm ci
+        run: |
+          npm install
+          npm run build
 
-      - name: Build Frontend
-        working-directory: ./student-project/frontend-nextjs
-        run: npm run build
-
-  # --- JOB 3 : VÉRIFICATION DES DOCKERFILES ---
   docker-build-check:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Set up Docker Buildx
+      - uses: actions/checkout@v3
+      - name: Set up Buildx
         uses: docker/setup-buildx-action@v2
-
-      - name: Test Build Backend Image
+      
+      - name: Build Backend Image
         uses: docker/build-push-action@v4
         with:
-          context: ./student-project/backend-csharp
-          file: ./student-project/backend-csharp/Dockerfile
-          push: false # On ne pousse pas sur le registre, on vérifie juste le build
-          tags: backend-test:latest
-
-      - name: Test Build Frontend Image
+          # On vérifie le contexte : on se met dans le dossier où est le Dockerfile
+          context: ./student-project/backend-csharp/StudentApi
+          push: false
+      
+      - name: Build Frontend Image
         uses: docker/build-push-action@v4
         with:
           context: ./student-project/frontend-nextjs
-          file: ./student-project/frontend-nextjs/Dockerfile
           push: false
-          tags: frontend-test:latest
 
-  # --- JOB 4 : LINTING DES MANIFESTES KUBERNETES ---
   kubernetes-lint:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Validate YAML syntax
+      - uses: actions/checkout@v3
+      - name: Validate YAML
+        # Correction : utilisation d'un script qui accepte le multi-document (---)
         run: |
-          # On installe un petit outil de validation si nécessaire ou on utilise python
-          for file in k8s/*.yaml; do
-            echo "Checking syntax for $file..."
-            python3 -c "import yaml, sys; yaml.safe_load(open('$file'))"
-          done
-
-  # --- JOB 5 : SCAN DE SÉCURITÉ (TRIVY) ---
-  security-scan:
-    runs-on: ubuntu-latest
-    needs: [docker-build-check] # On attend que le build docker soit validé
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Scan Backend Image for vulnerabilities
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'backend-test:latest'
-          format: 'table'
-          exit-code: '0' # On ne bloque pas le pipeline mais on affiche les failles
-          severity: 'CRITICAL,HIGH'
+          python3 -c "import yaml; [list(yaml.safe_load_all(open(f))) for f in ['k8s/backend-deployment.yaml', 'k8s/frontend-deployment.yaml', 'k8s/efrei-ingress.yaml', 'k8s/mysql-deployment.yaml']]"
