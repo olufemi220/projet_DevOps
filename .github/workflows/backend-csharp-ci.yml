@@ -1,23 +1,17 @@
-name: Backend C# CI/CD
+name: Global Project Verification
 
 on:
   push:
-    branches: [ "main", "feature/backend-csharp" ]
+    branches:
+      - '**' # S'exécute sur absolument toutes les branches
   pull_request:
-    branches: [ "main" ]
-
-env:
-  REGISTRY: ghcr.io
-  # On force le nom en minuscules pour éviter les erreurs de rejet de GitHub
-  IMAGE_NAME: ${{ github.repository }}-backend
+    branches:
+      - '**'
 
 jobs:
-  build-and-push:
+  # --- JOB 1 : VÉRIFICATION DU BACKEND C# ---
+  backend-verification:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -25,32 +19,89 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: 7.0.x
+          dotnet-version: '7.0.x'
 
-      # 1. Vérification du code (CI)
       - name: Restore dependencies
         run: dotnet restore ./student-project/backend-csharp/StudentApi/StudentApi.csproj
 
-      - name: Build
+      - name: Build Backend
         run: dotnet build ./student-project/backend-csharp/StudentApi/StudentApi.csproj --no-restore -c Release
 
-      # 2. Préparation Docker (CD)
-      - name: Log in to the Container registry
-        uses: docker/login-action@v2
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+  # --- JOB 2 : VÉRIFICATION DU FRONTEND NEXT.JS ---
+  frontend-verification:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      # 3. Construction et Publication de l'image
-      - name: Build and push Docker image
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: './student-project/frontend-nextjs/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: ./student-project/frontend-nextjs
+        run: npm ci
+
+      - name: Build Frontend
+        working-directory: ./student-project/frontend-nextjs
+        run: npm run build
+
+  # --- JOB 3 : VÉRIFICATION DES DOCKERFILES ---
+  docker-build-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Test Build Backend Image
         uses: docker/build-push-action@v4
         with:
-          # Le context doit pointer vers le dossier racine du projet C#
-          context: ./student-project/backend-csharp/StudentApi
-          file: ./student-project/backend-csharp/StudentApi/Dockerfile
-          push: true
-          # On génère le tag en minuscules pour GHCR
-          tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/projet-devops-backend:latest
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/projet-devops-backend:${{ github.sha }}
+          context: ./student-project/backend-csharp
+          file: ./student-project/backend-csharp/Dockerfile
+          push: false # On ne pousse pas sur le registre, on vérifie juste le build
+          tags: backend-test:latest
+
+      - name: Test Build Frontend Image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./student-project/frontend-nextjs
+          file: ./student-project/frontend-nextjs/Dockerfile
+          push: false
+          tags: frontend-test:latest
+
+  # --- JOB 4 : LINTING DES MANIFESTES KUBERNETES ---
+  kubernetes-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Validate YAML syntax
+        run: |
+          # On installe un petit outil de validation si nécessaire ou on utilise python
+          for file in k8s/*.yaml; do
+            echo "Checking syntax for $file..."
+            python3 -c "import yaml, sys; yaml.safe_load(open('$file'))"
+          done
+
+  # --- JOB 5 : SCAN DE SÉCURITÉ (TRIVY) ---
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: [docker-build-check] # On attend que le build docker soit validé
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Scan Backend Image for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'backend-test:latest'
+          format: 'table'
+          exit-code: '0' # On ne bloque pas le pipeline mais on affiche les failles
+          severity: 'CRITICAL,HIGH'
