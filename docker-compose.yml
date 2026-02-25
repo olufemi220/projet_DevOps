@@ -1,26 +1,69 @@
+# services:
+#   db:
+#     image: mysql:8.0
+#     container_name: mysql-student
+#     restart: always
+#     environment:
+#       MYSQL_DATABASE: student_db
+#       MYSQL_ROOT_PASSWORD: root
+#     ports:
+#       - "3306:3306"
+#     volumes:
+#       - ./student-project/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+#   backend-csharp:
+#     build:
+#       context: ./student-project/backend-csharp/StudentApi
+#       dockerfile: Dockerfile
+#       network: host
+#     container_name: backend-csharp
+#     ports:
+#       - "5020:5000"
+#     environment:
+#       - ASPNETCORE_ENVIRONMENT=Development
+#       - ConnectionStrings__DefaultConnection=server=db;port=3306;database=student_db;user=root;password=root
+#     depends_on:
+#       - db
+
+
 services:
-  db:
+  mysql-db:
     image: mysql:8.0
-    container_name: mysql-student
-    restart: always
+    container_name: mysql-db
     environment:
-      MYSQL_DATABASE: student_db
       MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: student_db
     ports:
       - "3306:3306"
     volumes:
-      - ./student-project/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend-csharp:
-    build:
-      context: ./student-project/backend-csharp/StudentApi
-      dockerfile: Dockerfile
-      network: host
+    image: projet_devops-backend-csharp:latest
     container_name: backend-csharp
     ports:
-      - "5020:5000"
+      - "5000:5000"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=server=db;port=3306;database=student_db;user=root;password=root
+      - ConnectionStrings__DefaultConnection=server=mysql-db;port=3306;database=student_db;user=root;password=root
     depends_on:
-      - db
+      mysql-db:
+        condition: service_healthy
+
+  frontend-nextjs:
+    build:
+      context: ./student-project/frontend-nextjs
+      dockerfile: Dockerfile
+      network: host  # <-- LA LIGNE MAGIQUE POUR LE RESEAU
+    container_name: frontend-nextjs
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend-csharp
+
+volumes:
+  mysql_data:

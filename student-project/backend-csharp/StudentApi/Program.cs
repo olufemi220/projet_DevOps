@@ -27,16 +27,31 @@ builder.Services.AddSwaggerGen();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+// On active Swagger partout (même en Production dans Docker) pour faciliter les tests
+app.UseSwagger();
+app.UseSwaggerUI();
 
 // Enable CORS - Must be placed before MapControllers
 app.UseCors("AllowAll");
 
 app.UseAuthorization();
 app.MapControllers();
+
+// --- FORCER LA CRÉATION DE LA BASE ET DES TABLES ---
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        var context = services.GetRequiredService<ApiDbContext>();
+        // Crée la base et les tables définies dans ApiDbContext si elles n'existent pas
+        context.Database.EnsureCreated();
+        Console.WriteLine("--- BASE DE DONNÉES ET TABLES PRÊTES ---");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Erreur critique lors de la création de la base : {ex.Message}");
+    }
+}
 
 app.Run();
