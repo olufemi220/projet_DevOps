@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-csharp
+spec:
+  selector:
+    app: backend-csharp
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
+  type: NodePort # Pour pouvoir y accéder depuis ton navigateur plus tard
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-csharp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend-csharp
+  template:
+    metadata:
+      labels:
+        app: backend-csharp
+    spec:
+      containers:
+      - name: backend-csharp
+        # Attention : On utilisera l'image locale que tu as déjà buildée
+        image: projet_devops-backend-csharp:latest
+        imagePullPolicy: Never # Force K8s à utiliser l'image locale de ton Docker
+        ports:
+        - containerPort: 5000
+        env:
+        - name: ConnectionStrings__DefaultConnection
+          value: "server=mysql-db;port=3306;database=student_db;user=root;password=root"
