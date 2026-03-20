@@ -1,0 +1,91 @@
+# backend-csharp.yaml
+# ASP.NET Core 7 backend - Deployment + Service + HPA
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-csharp
+  namespace: student-management
+  labels:
+    app: backend-csharp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend-csharp
+  template:
+    metadata:
+      labels:
+        app: backend-csharp
+    spec:
+      containers:
+        - name: backend-csharp
+          image: student-management/backend-csharp:latest
+          imagePullPolicy: Never  # Use local Minikube image
+          ports:
+            - containerPort: 5000
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Production"
+            - name: ASPNETCORE_URLS
+              value: "http://+:5000"
+            - name: ConnectionStrings__DefaultConnection
+              value: "Server=mysql;Port=3306;Database=StudentManagement_PRD;Uid=root;Pwd=root;"
+          # Liveness probe - restart if app crashes
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # Readiness probe - remove from load balancer if not ready
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "300m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-csharp
+  namespace: student-management
+spec:
+  selector:
+    app: backend-csharp
+  ports:
+    - port: 5000
+      targetPort: 5000
+  type: ClusterIP
+---
+# HPA - Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend-csharp-hpa
+  namespace: student-management
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend-csharp
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

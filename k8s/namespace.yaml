@@ -1,0 +1,9 @@
+# namespace.yaml
+# Creates the student-management namespace for all resources
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: student-management
+  labels:
+    project: student-management
+    env: dev

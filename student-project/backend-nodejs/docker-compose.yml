@@ -1,0 +1,308 @@
+services:
+
+  # ── MySQL ────────────────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: student-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: StudentManagement_Dev
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./student-project/database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - student-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ════════════════════════════════════════════════════════════════════════════
+  #  BACKEND C# - ASP.NET Core 7
+  # ════════════════════════════════════════════════════════════════════════════
+
+  backend-csharp-prd:
+    build:
+      context: ./student-project/backend-csharp/StudentApi
+      dockerfile: Dockerfile
+    container_name: student-backend-csharp-prd
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:5000
+      - ConnectionStrings__DefaultConnection=Server=mysql;Port=3306;Database=StudentManagement_PRD;Uid=root;Pwd=root;
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - student-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  backend-csharp-uat:
+    build:
+      context: ./student-project/backend-csharp/StudentApi
+      dockerfile: Dockerfile
+    container_name: student-backend-csharp-uat
+    restart: unless-stopped
+    ports:
+      - "5010:5000"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Staging
+      - ASPNETCORE_URLS=http://+:5000
+      - ConnectionStrings__DefaultConnection=Server=mysql;Port=3306;Database=StudentManagement_UAT;Uid=root;Pwd=root;
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - student-network
+
+  backend-csharp-dev:
+    build:
+      context: ./student-project/backend-csharp/StudentApi
+      dockerfile: Dockerfile
+    container_name: student-backend-csharp-dev
+    restart: unless-stopped
+    ports:
+      - "5020:5000"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5000
+      - ConnectionStrings__DefaultConnection=Server=mysql;Port=3306;Database=StudentManagement_Dev;Uid=root;Pwd=root;
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - student-network
+
+  # ════════════════════════════════════════════════════════════════════════════
+  #  BACKEND JAVA - Spring Boot 3.1
+  # ════════════════════════════════════════════════════════════════════════════
+
+  backend-java-prd:
+    build:
+      context: ./student-project/backend-springboot
+      dockerfile: Dockerfile
+    container_name: student-backend-java-prd
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/StudentManagement_PRD?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SERVER_PORT=8080
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - student-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+  backend-java-uat:
+    build:
+      context: ./student-project/backend-springboot
+      dockerfile: Dockerfile
+    container_name: student-backend-java-uat
+    restart: unless-stopped
+    ports:
+      - "8090:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/StudentManagement_UAT?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SERVER_PORT=8080
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - student-network
+
+  backend-java-dev:
+    build:
+      context: ./student-project/backend-springboot
+      dockerfile: Dockerfile
+    container_name: student-backend-java-dev
+    restart: unless-stopped
+    ports:
+      - "8100:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/StudentManagement_Dev?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SERVER_PORT=8080
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - student-network
+
+  # ════════════════════════════════════════════════════════════════════════════
+  #  BACKEND NODE.JS - Express + mysql2
+  # ════════════════════════════════════════════════════════════════════════════
+
+  backend-node-prd:
+    build:
+      context: ./student-project/backend-nodejs
+      dockerfile: Dockerfile
+    container_name: student-backend-node-prd
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=root
+      - DB_NAME=StudentManagement_PRD
+      - CORS_ORIGIN=http://localhost:3000
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - student-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  backend-node-uat:
+    build:
+      context: ./student-project/backend-nodejs
+      dockerfile: Dockerfile
+    container_name: student-backend-node-uat
+    restart: unless-stopped
+    ports:
+      - "4010:4000"
+    environment:
+      - NODE_ENV=staging
+      - PORT=4000
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=root
+      - DB_NAME=StudentManagement_UAT
+      - CORS_ORIGIN=http://localhost:3010
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - student-network
+
+  backend-node-dev:
+    build:
+      context: ./student-project/backend-nodejs
+      dockerfile: Dockerfile
+    container_name: student-backend-node-dev
+    restart: unless-stopped
+    ports:
+      - "4020:4000"
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=root
+      - DB_NAME=StudentManagement_Dev
+      - CORS_ORIGIN=http://localhost:3020
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - student-network
+
+  # ════════════════════════════════════════════════════════════════════════════
+  #  FRONTEND - Next.js 14
+  # ════════════════════════════════════════════════════════════════════════════
+
+  frontend-prd:
+    build:
+      context: ./student-project/frontend-nextjs
+      dockerfile: Dockerfile
+    container_name: student-frontend-prd
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_CSHARP_URL=http://localhost:5000
+      - NEXT_PUBLIC_API_JAVA_URL=http://localhost:8080
+      - NEXT_PUBLIC_API_NODE_URL=http://localhost:4000
+    depends_on:
+      - backend-csharp-prd
+      - backend-java-prd
+      - backend-node-prd
+    networks:
+      - student-network
+
+  frontend-uat:
+    build:
+      context: ./student-project/frontend-nextjs
+      dockerfile: Dockerfile
+    container_name: student-frontend-uat
+    restart: unless-stopped
+    ports:
+      - "3010:3000"
+    environment:
+      - NODE_ENV=staging
+      - NEXT_PUBLIC_API_CSHARP_URL=http://localhost:5010
+      - NEXT_PUBLIC_API_JAVA_URL=http://localhost:8090
+      - NEXT_PUBLIC_API_NODE_URL=http://localhost:4010
+    depends_on:
+      - backend-csharp-uat
+      - backend-java-uat
+      - backend-node-uat
+    networks:
+      - student-network
+
+  frontend-dev:
+    build:
+      context: ./student-project/frontend-nextjs
+      dockerfile: Dockerfile
+    container_name: student-frontend-dev
+    restart: unless-stopped
+    ports:
+      - "3020:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_CSHARP_URL=http://localhost:5020
+      - NEXT_PUBLIC_API_JAVA_URL=http://localhost:8100
+      - NEXT_PUBLIC_API_NODE_URL=http://localhost:4020
+    depends_on:
+      - backend-csharp-dev
+      - backend-java-dev
+      - backend-node-dev
+    networks:
+      - student-network
+
+networks:
+  student-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local

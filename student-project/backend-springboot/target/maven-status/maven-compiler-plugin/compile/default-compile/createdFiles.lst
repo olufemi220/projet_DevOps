@@ -1,0 +1,8 @@
+com/efrei/studentapi/repository/StudentRepository.class
+com/efrei/studentapi/service/StudentService.class
+com/efrei/studentapi/model/Student.class
+com/efrei/studentapi/model/Student$StudentBuilder.class
+com/efrei/studentapi/StudentApiApplication.class
+com/efrei/studentapi/controller/StudentController.class
+com/efrei/studentapi/exception/StudentNotFoundException.class
+com/efrei/studentapi/exception/GlobalExceptionHandler.class

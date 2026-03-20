@@ -1,0 +1,86 @@
+{
+  "format": 1,
+  "restore": {
+    "/home/imhotep/efrei/projet_DevOps/student-project/backend-csharp/StudentApi/StudentApi.csproj": {}
+  },
+  "projects": {
+    "/home/imhotep/efrei/projet_DevOps/student-project/backend-csharp/StudentApi/StudentApi.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/home/imhotep/efrei/projet_DevOps/student-project/backend-csharp/StudentApi/StudentApi.csproj",
+        "projectName": "StudentApi",
+        "projectPath": "/home/imhotep/efrei/projet_DevOps/student-project/backend-csharp/StudentApi/StudentApi.csproj",
+        "packagesPath": "/home/imhotep/.nuget/packages/",
+        "outputPath": "/home/imhotep/efrei/projet_DevOps/student-project/backend-csharp/StudentApi/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/home/imhotep/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net7.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net7.0": {
+            "targetAlias": "net7.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        }
+      },
+      "frameworks": {
+        "net7.0": {
+          "targetAlias": "net7.0",
+          "dependencies": {
+            "Microsoft.EntityFrameworkCore": {
+              "target": "Package",
+              "version": "[7.0.14, )"
+            },
+            "Microsoft.EntityFrameworkCore.Design": {
+              "target": "Package",
+              "version": "[7.0.14, )"
+            },
+            "Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore": {
+              "target": "Package",
+              "version": "[7.0.14, )"
+            },
+            "Pomelo.EntityFrameworkCore.MySql": {
+              "target": "Package",
+              "version": "[7.0.0, )"
+            },
+            "Swashbuckle.AspNetCore": {
+              "target": "Package",
+              "version": "[6.5.0, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.AspNetCore.App": {
+              "privateAssets": "none"
+            },
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/home/imhotep/.dotnet/sdk/7.0.410/RuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

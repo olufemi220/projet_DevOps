@@ -1,57 +1,95 @@
+// Program.cs
+// ASP.NET Core 7 application configuration and startup
+
 using Microsoft.EntityFrameworkCore;
 using StudentApi.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+// ── Logging ──────────────────────────────────────────────────────────────────
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
 
-builder.Services.AddDbContext<ApiDbContext>(options =>
-    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+// ── Database ─────────────────────────────────────────────────────────────────
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
-// Add CORS policy to allow Frontend (Member 1) to access the API
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseMySql(
+        connectionString,
+        new MySqlServerVersion(new Version(8, 0, 0)),
+        mysqlOptions => mysqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(10),
+            errorNumbersToAdd: null
+        )
+    )
+);
+
+// ── Controllers ───────────────────────────────────────────────────────────────
+builder.Services.AddControllers();
+
+// ── CORS - allow frontend ─────────────────────────────────────────────────────
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
-    {
+    options.AddPolicy("AllowFrontend", policy =>
         policy.AllowAnyOrigin()
               .AllowAnyMethod()
-              .AllowAnyHeader();
+              .AllowAnyHeader());
+});
+
+// ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new()
+    {
+        Title = "Student Management API - C#",
+        Version = "v1",
+        Description = "REST API for managing students. Part of the EFREI microservices project (ASP.NET Core 7 backend)."
     });
 });
 
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+// ── Health Checks ─────────────────────────────────────────────────────────────
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<ApplicationDbContext>();
 
+// ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-// On active Swagger partout (même en Production dans Docker) pour faciliter les tests
-app.UseSwagger();
-app.UseSwaggerUI();
-
-// Enable CORS - Must be placed before MapControllers
-app.UseCors("AllowAll");
-
-app.UseAuthorization();
-app.MapControllers();
-
-// --- FORCER LA CRÉATION DE LA BASE ET DES TABLES ---
+// ── Auto-migrate database on startup ──────────────────────────────────────────
 using (var scope = app.Services.CreateScope())
 {
-    var services = scope.ServiceProvider;
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     try
     {
-        var context = services.GetRequiredService<ApiDbContext>();
-        // Crée la base et les tables définies dans ApiDbContext si elles n'existent pas
-        context.Database.EnsureCreated();
-        Console.WriteLine("--- BASE DE DONNÉES ET TABLES PRÊTES ---");
+        logger.LogInformation("Applying database migrations...");
+        db.Database.Migrate();
+        logger.LogInformation("Database migrations applied successfully.");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Erreur critique lors de la création de la base : {ex.Message}");
+        logger.LogError(ex, "Failed to apply database migrations.");
     }
 }
+
+// ── Middleware pipeline ───────────────────────────────────────────────────────
+app.UseCors("AllowFrontend");
+
+// Swagger always enabled (useful in all envs for this project)
+app.UseSwagger();
+app.UseSwaggerUI(options =>
+{
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "Student API v1");
+    options.RoutePrefix = "swagger";
+});
+
+// Health check endpoint (used by Docker/K8s probes)
+app.MapHealthChecks("/health");
+
+app.UseAuthorization();
+app.MapControllers();
 
 app.Run();

@@ -1,9 +1,0 @@
-# Ignorer le SDK installé localement
-dotnet-sdk/
-
-# Ignorer les dossiers de build C#
-**/bin/
-**/obj/
-
-# Ignorer les fichiers de config VS Code
-.vscode/
