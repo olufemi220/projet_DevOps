@@ -1,0 +1,423 @@
+# =============================================================================
+# GitHub Actions CI/CD Pipeline
+# Student Management Micro-services - EFREI 2025-2026
+#
+# Stages:
+#   1. build    → Compile all services (C#, Java, Node.js, Next.js)
+#   2. test     → Run unit tests and linting
+#   3. docker   → Build and push Docker images to GitHub Container Registry
+#   4. deploy   → Deploy to DEV, UAT, PRD environments via Docker Compose
+# =============================================================================
+
+name: CI/CD Pipeline - Student Management
+
+on:
+  push:
+    branches:
+      - main        # triggers deploy to PRD
+      - develop     # triggers deploy to DEV
+      - uat         # triggers deploy to UAT
+  pull_request:
+    branches:
+      - main
+      - develop
+
+# Global environment variables
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
+
+# =============================================================================
+# STAGE 1 - BUILD
+# =============================================================================
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # Build: Frontend Next.js
+  # ---------------------------------------------------------------------------
+  build-frontend:
+    name: "Build | Frontend Next.js"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./student-project/frontend-nextjs
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: student-project/frontend-nextjs/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js application
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: student-project/frontend-nextjs/.next/
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # Build: Backend C# (.NET 7)
+  # ---------------------------------------------------------------------------
+  build-csharp:
+    name: "Build | Backend C# (.NET 7)"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 7
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "7.0.x"
+
+      - name: Restore NuGet packages
+        run: dotnet restore ./student-project/backend-csharp/StudentApi/StudentApi.csproj
+
+      - name: Build in Release mode
+        run: dotnet build ./student-project/backend-csharp/StudentApi/StudentApi.csproj -c Release --no-restore
+
+      - name: Publish application
+        run: dotnet publish ./student-project/backend-csharp/StudentApi/StudentApi.csproj -c Release -o ./publish --no-build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: csharp-build
+          path: publish/
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # Build: Backend Java (Spring Boot)
+  # ---------------------------------------------------------------------------
+  build-springboot:
+    name: "Build | Backend Java (Spring Boot)"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: "maven"
+
+      - name: Build with Maven (skip tests for build stage)
+        run: mvn clean package -DskipTests -f ./student-project/backend-springboot/pom.xml
+
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: springboot-build
+          path: student-project/backend-springboot/target/*.jar
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # Build: Backend Node.js (Express)
+  # ---------------------------------------------------------------------------
+  build-nodejs:
+    name: "Build | Backend Node.js (Express)"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./student-project/backend-nodejs
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: student-project/backend-nodejs/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify application starts (syntax check)
+        run: node --check src/app.js
+
+# =============================================================================
+# STAGE 2 - TEST
+# =============================================================================
+
+  # ---------------------------------------------------------------------------
+  # Test: Frontend linting
+  # ---------------------------------------------------------------------------
+  test-frontend:
+    name: "Test | Frontend Lint"
+    runs-on: ubuntu-latest
+    needs: build-frontend
+    defaults:
+      run:
+        working-directory: ./student-project/frontend-nextjs
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: student-project/frontend-nextjs/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+  # ---------------------------------------------------------------------------
+  # Test: Java unit tests (Spring Boot)
+  # ---------------------------------------------------------------------------
+  test-springboot:
+    name: "Test | Spring Boot Unit Tests"
+    runs-on: ubuntu-latest
+    needs: build-springboot
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: "maven"
+
+      - name: Run unit tests
+        run: mvn test -f ./student-project/backend-springboot/pom.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: springboot-test-results
+          path: student-project/backend-springboot/target/surefire-reports/
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Test: Kubernetes YAML validation
+  # ---------------------------------------------------------------------------
+  test-kubernetes:
+    name: "Test | Kubernetes Manifests Validation"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install kubeval
+        run: |
+          wget https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz
+          tar xf kubeval-linux-amd64.tar.gz
+          sudo mv kubeval /usr/local/bin
+
+      - name: Validate Kubernetes manifests
+        run: |
+          find k8s/ -name "*.yaml" -o -name "*.yml" | xargs kubeval --ignore-missing-schemas
+
+# =============================================================================
+# STAGE 3 - DOCKER PUSH (only on push to main/develop/uat)
+# =============================================================================
+
+  # ---------------------------------------------------------------------------
+  # Docker: Build and push all images to GitHub Container Registry
+  # ---------------------------------------------------------------------------
+  docker-push:
+    name: "Docker | Build & Push Images"
+    runs-on: ubuntu-latest
+    needs:
+      - test-frontend
+      - test-springboot
+      - build-csharp
+      - build-nodejs
+    if: github.event_name == 'push'
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine environment tag
+        id: env-tag
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "tag=prd" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref_name }}" = "uat" ]; then
+            echo "tag=uat" >> $GITHUB_OUTPUT
+          else
+            echo "tag=dev" >> $GITHUB_OUTPUT
+          fi
+
+      # Build & Push Frontend
+      - name: Build and push Frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./student-project/frontend-nextjs
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/student-frontend:${{ steps.env-tag.outputs.tag }}
+            ${{ env.IMAGE_PREFIX }}/student-frontend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Build & Push Backend C#
+      - name: Build and push Backend C# image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./student-project/backend-csharp/StudentApi
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/student-backend-csharp:${{ steps.env-tag.outputs.tag }}
+            ${{ env.IMAGE_PREFIX }}/student-backend-csharp:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Build & Push Backend Spring Boot
+      - name: Build and push Backend Spring Boot image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./student-project/backend-springboot
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/student-backend-springboot:${{ steps.env-tag.outputs.tag }}
+            ${{ env.IMAGE_PREFIX }}/student-backend-springboot:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Build & Push Backend Node.js
+      - name: Build and push Backend Node.js image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./student-project/backend-nodejs
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/student-backend-nodejs:${{ steps.env-tag.outputs.tag }}
+            ${{ env.IMAGE_PREFIX }}/student-backend-nodejs:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+# =============================================================================
+# STAGE 4 - DEPLOY
+# =============================================================================
+
+  # ---------------------------------------------------------------------------
+  # Deploy: DEV environment (auto on push to develop)
+  # ---------------------------------------------------------------------------
+  deploy-dev:
+    name: "Deploy | DEV Environment"
+    runs-on: ubuntu-latest
+    needs: docker-push
+    if: github.ref_name == 'develop'
+    environment:
+      name: development
+      url: http://localhost:3020
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to DEV with Docker Compose
+        run: |
+          echo "Deploying to DEV environment (ports: +20)"
+          docker compose -f docker-compose.yml \
+            -f docker-compose.dev.yml \
+            up -d --pull always
+        env:
+          ENV_NAME: dev
+          FRONTEND_PORT: 3020
+          CSHARP_PORT: 5020
+          JAVA_PORT: 8090
+          NODE_PORT: 4020
+          DB_NAME: StudentManagement_Dev
+
+  # ---------------------------------------------------------------------------
+  # Deploy: UAT environment (auto on push to uat)
+  # ---------------------------------------------------------------------------
+  deploy-uat:
+    name: "Deploy | UAT Environment"
+    runs-on: ubuntu-latest
+    needs: docker-push
+    if: github.ref_name == 'uat'
+    environment:
+      name: uat
+      url: http://localhost:3010
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to UAT with Docker Compose
+        run: |
+          echo "Deploying to UAT environment (ports: +10)"
+          docker compose -f docker-compose.yml \
+            -f docker-compose.uat.yml \
+            up -d --pull always
+        env:
+          ENV_NAME: uat
+          FRONTEND_PORT: 3010
+          CSHARP_PORT: 5010
+          JAVA_PORT: 8090
+          NODE_PORT: 4010
+          DB_NAME: StudentManagement_UAT
+
+  # ---------------------------------------------------------------------------
+  # Deploy: PRD environment (manual approval required on push to main)
+  # ---------------------------------------------------------------------------
+  deploy-prd:
+    name: "Deploy | PRD Environment (manual)"
+    runs-on: ubuntu-latest
+    needs: docker-push
+    if: github.ref_name == 'main'
+    environment:
+      name: production
+      url: http://localhost:3000
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to PRD with Docker Compose
+        run: |
+          echo "Deploying to PRODUCTION environment"
+          docker compose -f docker-compose.yml up -d --pull always
+        env:
+          ENV_NAME: prd
+          FRONTEND_PORT: 3000
+          CSHARP_PORT: 5000
+          JAVA_PORT: 8080
+          NODE_PORT: 4000
+          DB_NAME: StudentManagement_PRD
