@@ -1,7 +1,0 @@
-/home/imhotep/efrei/projet_DevOps/student-project/backend-springboot/src/main/java/com/efrei/studentapi/service/StudentService.java
-/home/imhotep/efrei/projet_DevOps/student-project/backend-springboot/src/main/java/com/efrei/studentapi/model/Student.java
-/home/imhotep/efrei/projet_DevOps/student-project/backend-springboot/src/main/java/com/efrei/studentapi/exception/StudentNotFoundException.java
-/home/imhotep/efrei/projet_DevOps/student-project/backend-springboot/src/main/java/com/efrei/studentapi/controller/StudentController.java
-/home/imhotep/efrei/projet_DevOps/student-project/backend-springboot/src/main/java/com/efrei/studentapi/StudentApiApplication.java
-/home/imhotep/efrei/projet_DevOps/student-project/backend-springboot/src/main/java/com/efrei/studentapi/repository/StudentRepository.java
-/home/imhotep/efrei/projet_DevOps/student-project/backend-springboot/src/main/java/com/efrei/studentapi/exception/GlobalExceptionHandler.java
