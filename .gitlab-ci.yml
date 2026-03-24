@@ -17,6 +17,13 @@ variables:
   IMAGE_JAVA: $CI_REGISTRY_IMAGE/backend-java
   IMAGE_NODE: $CI_REGISTRY_IMAGE/backend-node
 
+# Global cache configuration
+cache:
+  paths:
+    - node_modules/
+    - student-project/backend-nodejs/node_modules/
+    - student-project/backend-springboot/.m2/
+
 # ─────────────────────────────────────────
 # BUILD
 # ─────────────────────────────────────────
@@ -39,6 +46,11 @@ build:csharp:
     - dotnet restore
     - dotnet build -c Release
     - dotnet publish -c Release -o ./publish
+  artifacts:
+    paths:
+      - student-project/backend-csharp/StudentApi/publish/
+    expire_in: 1 week
+    when: on_success
 
 build:springboot:
   stage: build
@@ -47,6 +59,11 @@ build:springboot:
     - echo "Building Java backend..."
     - cd student-project/backend-springboot
     - mvn clean package -DskipTests
+  artifacts:
+    paths:
+      - student-project/backend-springboot/target/
+    expire_in: 1 week
+    when: on_success
 
 # ─────────────────────────────────────────
 # TEST
@@ -80,7 +97,9 @@ push:frontend:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - echo "Building & pushing frontend image..."
     - docker build -t $IMAGE_FRONTEND:$CI_COMMIT_SHORT_SHA student-project/frontend-nextjs
+    - docker build -t $IMAGE_FRONTEND:latest student-project/frontend-nextjs
     - docker push $IMAGE_FRONTEND:$CI_COMMIT_SHORT_SHA
+    - docker push $IMAGE_FRONTEND:latest
 
 push:csharp:
   stage: push
@@ -89,7 +108,9 @@ push:csharp:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - echo "Building & pushing C# image..."
     - docker build -t $IMAGE_CSHARP:$CI_COMMIT_SHORT_SHA student-project/backend-csharp/StudentApi
+    - docker build -t $IMAGE_CSHARP:latest student-project/backend-csharp/StudentApi
     - docker push $IMAGE_CSHARP:$CI_COMMIT_SHORT_SHA
+    - docker push $IMAGE_CSHARP:latest
 
 push:java:
   stage: push
@@ -98,7 +119,9 @@ push:java:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - echo "Building & pushing Java image..."
     - docker build -t $IMAGE_JAVA:$CI_COMMIT_SHORT_SHA student-project/backend-springboot
+    - docker build -t $IMAGE_JAVA:latest student-project/backend-springboot
     - docker push $IMAGE_JAVA:$CI_COMMIT_SHORT_SHA
+    - docker push $IMAGE_JAVA:latest
 
 push:node:
   stage: push
@@ -107,7 +130,9 @@ push:node:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - echo "Building & pushing Node image..."
     - docker build -t $IMAGE_NODE:$CI_COMMIT_SHORT_SHA student-project/backend-nodejs
+    - docker build -t $IMAGE_NODE:latest student-project/backend-nodejs
     - docker push $IMAGE_NODE:$CI_COMMIT_SHORT_SHA
+    - docker push $IMAGE_NODE:latest
 
 # ─────────────────────────────────────────
 # DEPLOY
