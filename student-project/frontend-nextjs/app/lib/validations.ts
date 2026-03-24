@@ -65,7 +65,7 @@ export function validateStudent(
   if (!result.success) {
     const errors: Record<string, string> = {};
     result.error.errors.forEach((error) => {
-      const path = error.path.join(".");
+      const path = error.path.map(p => String(p)).join(".");
       errors[path] = error.message;
     });
     return { success: false, errors };

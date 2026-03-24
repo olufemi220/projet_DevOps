@@ -65,6 +65,20 @@ build:springboot:
     expire_in: 1 week
     when: on_success
 
+build:node:
+  stage: build
+  image: node:20
+  script:
+    - echo "Building Node.js backend..."
+    - cd student-project/backend-nodejs
+    - npm install
+    - npm run build || true
+  artifacts:
+    paths:
+      - student-project/backend-nodejs/dist/
+    expire_in: 1 week
+    when: on_success
+
 # ─────────────────────────────────────────
 # TEST
 # ─────────────────────────────────────────

@@ -1,0 +1,72 @@
+# .dockerignore pour tous les services
+# Réduit la taille du build context
+
+# Git and version control
+.git
+.gitignore
+.gitattributes
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+.npm
+.yarn
+dist/
+build/
+.cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.env.local
+.env*.local
+
+# Testing
+coverage/
+.nyc_output/
+jest-cache/
+test-results/
+
+# Next.js specific
+.next/
+.next/cache
+out/
+
+# Build outputs
+dist/
+build/
+target/
+bin/
+obj/
+
+# Documentation
+docs/
+
+# CI/CD
+.gitlab-ci.yml
+Dockerfile
+docker-compose.yml
+.github/
+
+# Misc
+README.md
+LICENSE
+CHANGELOG.md
+.prettierignore
+.eslintignore
+
+# OS files
+Thumbs.db
+.DS_Store
