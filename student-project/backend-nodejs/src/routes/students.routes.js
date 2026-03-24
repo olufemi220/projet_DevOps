@@ -2,6 +2,7 @@
 const { Router } = require("express");
 const studentsController = require("../controllers/students.controller");
 const { validateCreateStudent, validateUpdateStudent, handleValidationErrors } = require("../middlewares/validation.middleware");
+const { strictLimiter } = require("../middlewares/rate-limit.middleware");
 
 const router = Router();
 
@@ -63,7 +64,7 @@ router.get("/:id", studentsController.getStudentById);
  *       409:
  *         description: Email already exists
  */
-router.post("/", validateCreateStudent, handleValidationErrors, studentsController.createStudent);
+router.post("/", strictLimiter, validateCreateStudent, handleValidationErrors, studentsController.createStudent);
 
 /**
  * @swagger
@@ -89,7 +90,7 @@ router.post("/", validateCreateStudent, handleValidationErrors, studentsControll
  *       404:
  *         description: Student not found
  */
-router.put("/:id", validateUpdateStudent, handleValidationErrors, studentsController.updateStudent);
+router.put("/:id", strictLimiter, validateUpdateStudent, handleValidationErrors, studentsController.updateStudent);
 
 /**
  * @swagger
@@ -109,6 +110,6 @@ router.put("/:id", validateUpdateStudent, handleValidationErrors, studentsContro
  *       404:
  *         description: Student not found
  */
-router.delete("/:id", studentsController.deleteStudent);
+router.delete("/:id", strictLimiter, studentsController.deleteStudent);
 
 module.exports = router;

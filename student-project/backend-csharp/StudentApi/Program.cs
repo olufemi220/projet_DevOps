@@ -30,13 +30,37 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // ── Controllers ───────────────────────────────────────────────────────────────
 builder.Services.AddControllers();
 
-// ── CORS - allow frontend ─────────────────────────────────────────────────────
+// ── CORS - Restrict to allowed origins only ──────────────────────────────────
+var corsOrigins = builder.Configuration["CORS_ALLOWED_ORIGINS"]?.Split(",") 
+    ?? new[] { "http://localhost:3000", "http://localhost:3010", "http://localhost:3020" };
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
-        policy.AllowAnyOrigin()
+        policy.WithOrigins(corsOrigins)
               .AllowAnyMethod()
-              .AllowAnyHeader());
+              .AllowAnyHeader()
+              .AllowCredentials());
+});
+
+// ── Rate Limiting ────────────────────────────────────────────────────────────
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddFixedWindowLimiter(policyName: "general", limiter =>
+    {
+        limiter.PermitLimit = 100;
+        limiter.Window = TimeSpan.FromMinutes(15);
+        limiter.QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst;
+        limiter.QueueLimit = 0;
+    });
+
+    options.AddFixedWindowLimiter(policyName: "strict", limiter =>
+    {
+        limiter.PermitLimit = 30;
+        limiter.Window = TimeSpan.FromMinutes(15);
+        limiter.QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst;
+        limiter.QueueLimit = 0;
+    });
 });
 
 // ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
@@ -77,6 +101,9 @@ using (var scope = app.Services.CreateScope())
 
 // ── Middleware pipeline ───────────────────────────────────────────────────────
 app.UseCors("AllowFrontend");
+
+// Apply rate limiting
+app.UseRateLimiter();
 
 // Swagger always enabled (useful in all envs for this project)
 app.UseSwagger();
