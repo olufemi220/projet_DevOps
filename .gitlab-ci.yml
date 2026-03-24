@@ -143,26 +143,96 @@ push:node:
 # DEPLOY
 # ─────────────────────────────────────────
 
+# Deploy DEV environment (Docker Compose)
 deploy:dev:
   stage: deploy
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
   script:
-    - echo "Deploying to DEV..."
+    - echo "Deploying to DEV using Docker Compose..."
+    - docker-compose -f docker-compose.yml up -d
+    - echo "Waiting for services to be healthy..."
+    - sleep 10
+    - docker-compose ps
+    - echo "DEV deployment completed successfully"
   only:
     - develop
   when: manual
+  environment:
+    name: development
+    url: http://localhost:3000
 
+# Deploy UAT environment (Kubernetes)
 deploy:uat:
   stage: deploy
+  image: bitnami/kubectl:latest
   script:
-    - echo "Deploying to UAT..."
+    - echo "Deploying to UAT (Kubernetes)..."
+    - kubectl config current-context
+    - kubectl create namespace student-management --dry-run=client -o yaml | kubectl apply -f -
+    - echo "Applying Kubernetes Secrets and ConfigMaps..."
+    - kubectl apply -f k8s/secrets.yaml
+    - kubectl apply -f k8s/mysql-configmap.yaml
+    - echo "Applying NetworkPolicy for security..."
+    - kubectl apply -f k8s/network-policy.yaml
+    - echo "Applying core infrastructure..."
+    - kubectl apply -f k8s/namespace.yaml
+    - kubectl apply -f k8s/mysql-statefulset.yaml
+    - echo "Applying backend services..."
+    - kubectl apply -f k8s/backend-csharp.yaml
+    - kubectl apply -f k8s/backend-java.yaml
+    - kubectl apply -f k8s/backend-node.yaml
+    - echo "Applying frontend service..."
+    - kubectl apply -f k8s/frontend.yaml
+    - echo "Waiting for deployments to be ready..."
+    - kubectl rollout status deployment/frontend -n student-management --timeout=5m
+    - kubectl rollout status deployment/backend-csharp -n student-management --timeout=5m
+    - kubectl rollout status deployment/backend-java -n student-management --timeout=5m
+    - kubectl rollout status deployment/backend-node -n student-management --timeout=5m
+    - echo "UAT deployment completed successfully"
+    - kubectl get pods -n student-management
   only:
     - main
   when: manual
+  environment:
+    name: staging
+    kubernetes:
+      namespace: student-management
 
+# Deploy PRD environment (Kubernetes)
 deploy:prd:
   stage: deploy
+  image: bitnami/kubectl:latest
   script:
-    - echo "Deploying to PRD..."
+    - echo "Deploying to PRD (Kubernetes)..."
+    - kubectl config current-context
+    - kubectl create namespace student-management --dry-run=client -o yaml | kubectl apply -f -
+    - echo "Applying production Kubernetes Secrets and ConfigMaps..."
+    - kubectl apply -f k8s/secrets.yaml
+    - kubectl apply -f k8s/mysql-configmap.yaml
+    - echo "Applying NetworkPolicy for security..."
+    - kubectl apply -f k8s/network-policy.yaml
+    - echo "Applying core infrastructure..."
+    - kubectl apply -f k8s/namespace.yaml
+    - kubectl apply -f k8s/mysql-statefulset.yaml
+    - echo "Applying backend services..."
+    - kubectl apply -f k8s/backend-csharp.yaml
+    - kubectl apply -f k8s/backend-java.yaml
+    - kubectl apply -f k8s/backend-node.yaml
+    - echo "Applying frontend service..."
+    - kubectl apply -f k8s/frontend.yaml
+    - echo "Performing rolling update..."
+    - kubectl rollout status deployment/frontend -n student-management --timeout=5m
+    - kubectl rollout status deployment/backend-csharp -n student-management --timeout=5m
+    - kubectl rollout status deployment/backend-java -n student-management --timeout=5m
+    - kubectl rollout status deployment/backend-node -n student-management --timeout=5m
+    - echo "Production deployment completed successfully"
+    - kubectl get pods -n student-management
   only:
     - main
   when: manual
+  environment:
+    name: production
+    kubernetes:
+      namespace: student-management
