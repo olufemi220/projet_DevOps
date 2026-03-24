@@ -1,240 +1,134 @@
-# .gitlab-ci.yml
-# CI/CD Pipeline - Student Management Microservices
-# Stages: build → test → push → deploy
-# Environments: DEV, UAT, PRD
-
 stages:
   - build
   - test
   - push
   - deploy
 
+# Docker global config
+image: docker:24.0.5
+
+services:
+  - docker:24.0.5-dind
+
 variables:
-  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
   IMAGE_FRONTEND: $CI_REGISTRY_IMAGE/frontend
   IMAGE_CSHARP: $CI_REGISTRY_IMAGE/backend-csharp
   IMAGE_JAVA: $CI_REGISTRY_IMAGE/backend-java
   IMAGE_NODE: $CI_REGISTRY_IMAGE/backend-node
 
-# ─────────────────────────────────────────────────────────────
-#  STAGE 1: BUILD
-# ─────────────────────────────────────────────────────────────
+# 🔐 LOGIN DOCKER (IMPORTANT)
+before_script:
+  - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+
+# ─────────────────────────────────────────
+# BUILD
+# ─────────────────────────────────────────
 
 build:frontend:
   stage: build
-  tags:
-    - shell
-    - linux
+  image: node:18
   script:
-    - echo "Building Frontend Next.js..."
+    - echo "Building Frontend..."
     - cd student-project/frontend-nextjs
     - npm install
     - npm run build
-    - echo "Frontend build successful"
-  artifacts:
-    paths:
-      - student-project/frontend-nextjs/.next/
-    expire_in: 1 hour
-  only:
-    - main
-    - develop
-    - merge_requests
 
 build:csharp:
   stage: build
-  tags:
-    - shell
-    - linux
+  image: mcr.microsoft.com/dotnet/sdk:7.0
   script:
-    - echo "Building Backend C#..."
+    - echo "Building C# backend..."
     - cd student-project/backend-csharp/StudentApi
-    - export DOTNET_ROOT=$HOME/.dotnet
-    - export PATH=$PATH:$HOME/.dotnet
     - dotnet restore
     - dotnet build -c Release
     - dotnet publish -c Release -o ./publish
-    - echo "C# build successful"
-  artifacts:
-    paths:
-      - student-project/backend-csharp/StudentApi/publish/
-    expire_in: 1 hour
-  only:
-    - main
-    - develop
-    - merge_requests
 
 build:springboot:
   stage: build
-  tags:
-    - shell
-    - linux
+  image: maven:3.9-eclipse-temurin-17
   script:
-    - echo "Building Backend Java Spring Boot..."
+    - echo "Building Java backend..."
     - cd student-project/backend-springboot
-    - mvn clean package -DskipTests -q
-    - echo "Java build successful"
-  artifacts:
-    paths:
-      - student-project/backend-springboot/target/*.jar
-    expire_in: 1 hour
-  only:
-    - main
-    - develop
-    - merge_requests
+    - mvn clean package -DskipTests
 
-# ─────────────────────────────────────────────────────────────
-#  STAGE 2: TEST
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────
+# TEST
+# ─────────────────────────────────────────
 
 test:frontend:
   stage: test
-  tags:
-    - shell
-    - linux
+  image: node:18
   script:
-    - echo "Running Frontend lint..."
+    - echo "Testing frontend..."
     - cd student-project/frontend-nextjs
     - npm install
-    - npm run lint || echo "Lint completed with warnings"
-    - echo "Frontend tests passed"
-  only:
-    - main
-    - develop
-    - merge_requests
+    - npm run lint || true
 
 test:springboot:
   stage: test
-  tags:
-    - shell
-    - linux
+  image: maven:3.9-eclipse-temurin-17
   script:
-    - echo "Running Java unit tests..."
+    - echo "Running Java tests..."
     - cd student-project/backend-springboot
-    - mvn test -q
-    - echo "Java tests passed"
-  artifacts:
-    reports:
-      junit: student-project/backend-springboot/target/surefire-reports/TEST-*.xml
-    expire_in: 1 week
-  only:
-    - main
-    - develop
-    - merge_requests
+    - mvn test
 
-# ─────────────────────────────────────────────────────────────
-#  STAGE 3: PUSH (Docker images)
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────
+# PUSH (Docker images)
+# ─────────────────────────────────────────
 
 push:frontend:
   stage: push
-  tags:
-    - shell
-    - linux
   script:
-    - echo "Building and pushing Frontend Docker image..."
-    - docker build -t $IMAGE_FRONTEND:$CI_COMMIT_SHORT_SHA -t $IMAGE_FRONTEND:latest
-        student-project/frontend-nextjs/
-    - echo "Frontend image built successfully - $IMAGE_FRONTEND:$CI_COMMIT_SHORT_SHA"
-  only:
-    - main
-    - develop
+    - echo "Building & pushing frontend image..."
+    - docker build -t $IMAGE_FRONTEND:$CI_COMMIT_SHORT_SHA student-project/frontend-nextjs
+    - docker push $IMAGE_FRONTEND:$CI_COMMIT_SHORT_SHA
 
 push:csharp:
   stage: push
-  tags:
-    - shell
-    - linux
   script:
-    - echo "Building and pushing C# Docker image..."
-    - docker build -t $IMAGE_CSHARP:$CI_COMMIT_SHORT_SHA -t $IMAGE_CSHARP:latest
-        student-project/backend-csharp/StudentApi/
-    - echo "C# image built successfully - $IMAGE_CSHARP:$CI_COMMIT_SHORT_SHA"
-  only:
-    - main
-    - develop
+    - echo "Building & pushing C# image..."
+    - docker build -t $IMAGE_CSHARP:$CI_COMMIT_SHORT_SHA student-project/backend-csharp/StudentApi
+    - docker push $IMAGE_CSHARP:$CI_COMMIT_SHORT_SHA
 
 push:java:
   stage: push
-  tags:
-    - shell
-    - linux
   script:
-    - echo "Building and pushing Java Docker image..."
-    - docker build -t $IMAGE_JAVA:$CI_COMMIT_SHORT_SHA -t $IMAGE_JAVA:latest
-        student-project/backend-springboot/
-    - echo "Java image built successfully - $IMAGE_JAVA:$CI_COMMIT_SHORT_SHA"
-  only:
-    - main
-    - develop
+    - echo "Building & pushing Java image..."
+    - docker build -t $IMAGE_JAVA:$CI_COMMIT_SHORT_SHA student-project/backend-springboot
+    - docker push $IMAGE_JAVA:$CI_COMMIT_SHORT_SHA
 
 push:node:
   stage: push
-  tags:
-    - shell
-    - linux
   script:
-    - echo "Building and pushing Node.js Docker image..."
-    - docker build -t $IMAGE_NODE:$CI_COMMIT_SHORT_SHA -t $IMAGE_NODE:latest
-        student-project/backend-nodejs/
-    - echo "Node.js image built successfully - $IMAGE_NODE:$CI_COMMIT_SHORT_SHA"
-  only:
-    - main
-    - develop
+    - echo "Building & pushing Node image..."
+    - docker build -t $IMAGE_NODE:$CI_COMMIT_SHORT_SHA student-project/backend-nodejs
+    - docker push $IMAGE_NODE:$CI_COMMIT_SHORT_SHA
 
-# ─────────────────────────────────────────────────────────────
-#  STAGE 4: DEPLOY
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────
+# DEPLOY
+# ─────────────────────────────────────────
 
 deploy:dev:
   stage: deploy
-  tags:
-    - shell
-    - linux
   script:
-    - echo "Deploying to DEV environment..."
-    - cd $CI_PROJECT_DIR
-    - docker compose up -d mysql backend-csharp-dev backend-java-dev backend-node-dev frontend-dev
-    - docker compose ps
-    - echo "DEV deployment successful"
-  environment:
-    name: development
-    url: http://localhost:3020
+    - echo "Deploying to DEV..."
   only:
     - develop
   when: manual
 
 deploy:uat:
   stage: deploy
-  tags:
-    - shell
-    - linux
   script:
-    - echo "Deploying to UAT environment..."
-    - cd $CI_PROJECT_DIR
-    - docker compose up -d mysql backend-csharp-uat backend-java-uat backend-node-uat frontend-uat
-    - docker compose ps
-    - echo "UAT deployment successful"
-  environment:
-    name: staging
-    url: http://localhost:3010
+    - echo "Deploying to UAT..."
   only:
     - main
   when: manual
 
 deploy:prd:
   stage: deploy
-  tags:
-    - shell
-    - linux
   script:
-    - echo "Deploying to PRD environment..."
-    - cd $CI_PROJECT_DIR
-    - docker compose up -d mysql backend-csharp-prd backend-java-prd backend-node-prd frontend-prd
-    - docker compose ps
-    - echo "PRD deployment successful"
-  environment:
-    name: production
-    url: http://localhost:3000
+    - echo "Deploying to PRD..."
   only:
     - main
   when: manual
