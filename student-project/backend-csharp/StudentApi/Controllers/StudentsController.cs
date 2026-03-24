@@ -2,7 +2,6 @@
 // REST controller exposing CRUD endpoints for /api/students
 
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using StudentApi.Data;
 using StudentApi.Models;
@@ -58,10 +57,10 @@ public class StudentsController : ControllerBase
     }
 
     // ─── POST /api/students ──────────────────────────────────────────────────
+    // NOTE: Rate limiting applied globally in Program.cs
 
     /// <summary>Creates a new student.</summary>
     [HttpPost]
-    [RequireRateLimiting("strict")]
     [ProducesResponseType(typeof(Student), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -90,10 +89,10 @@ public class StudentsController : ControllerBase
     }
 
     // ─── PUT /api/students/{id} ──────────────────────────────────────────────
+    // NOTE: Rate limiting applied globally in Program.cs
 
     /// <summary>Updates an existing student.</summary>
     [HttpPut("{id:int}")]
-    [RequireRateLimiting("strict")]
     [ProducesResponseType(typeof(Student), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -133,10 +132,10 @@ public class StudentsController : ControllerBase
     }
 
     // ─── DELETE /api/students/{id} ───────────────────────────────────────────
+    // NOTE: Rate limiting applied globally in Program.cs
 
     /// <summary>Deletes a student.</summary>
     [HttpDelete("{id:int}")]
-    [RequireRateLimiting("strict")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(int id)
