@@ -75,8 +75,8 @@ test:springboot:
 
 push:frontend:
   stage: push
-  image: # Override image globale
-  services: # Override services globaux
+  image: null
+  services: []
   script:
     - echo "Login to GitLab registry..."
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
@@ -86,8 +86,8 @@ push:frontend:
 
 push:csharp:
   stage: push
-  image: # Override image globale
-  services: # Override services globaux
+  image: null
+  services: []
   script:
     - echo "Login to GitLab registry..."
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
@@ -97,8 +97,8 @@ push:csharp:
 
 push:java:
   stage: push
-  image: # Override image globale
-  services: # Override services globaux
+  image: null
+  services: []
   script:
     - echo "Login to GitLab registry..."
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
@@ -108,8 +108,8 @@ push:java:
 
 push:node:
   stage: push
-  image: # Override image globale
-  services: # Override services globaux
+  image: null
+  services: []
   script:
     - echo "Login to GitLab registry..."
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
