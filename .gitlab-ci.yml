@@ -4,7 +4,7 @@ stages:
   - push
   - deploy
 
-# Docker global config (pour les jobs qui en ont besoin)
+# Docker global config
 image: docker:24.0.5
 
 services:
@@ -23,7 +23,7 @@ variables:
 
 build:frontend:
   stage: build
-  image: node:18
+  image: node:20
   script:
     - echo "Building Frontend..."
     - cd student-project/frontend-nextjs
@@ -54,7 +54,7 @@ build:springboot:
 
 test:frontend:
   stage: test
-  image: node:18
+  image: node:20
   script:
     - echo "Testing frontend..."
     - cd student-project/frontend-nextjs
