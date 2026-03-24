@@ -4,7 +4,7 @@ stages:
   - push
   - deploy
 
-# Docker global config
+# Docker global config (pour les jobs qui en ont besoin)
 image: docker:24.0.5
 
 services:
@@ -16,10 +16,6 @@ variables:
   IMAGE_CSHARP: $CI_REGISTRY_IMAGE/backend-csharp
   IMAGE_JAVA: $CI_REGISTRY_IMAGE/backend-java
   IMAGE_NODE: $CI_REGISTRY_IMAGE/backend-node
-
-# 🔐 LOGIN DOCKER (IMPORTANT)
-before_script:
-  - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
 
 # ─────────────────────────────────────────
 # BUILD
@@ -80,6 +76,8 @@ test:springboot:
 push:frontend:
   stage: push
   script:
+    - echo "Login to GitLab registry..."
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - echo "Building & pushing frontend image..."
     - docker build -t $IMAGE_FRONTEND:$CI_COMMIT_SHORT_SHA student-project/frontend-nextjs
     - docker push $IMAGE_FRONTEND:$CI_COMMIT_SHORT_SHA
@@ -87,6 +85,8 @@ push:frontend:
 push:csharp:
   stage: push
   script:
+    - echo "Login to GitLab registry..."
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - echo "Building & pushing C# image..."
     - docker build -t $IMAGE_CSHARP:$CI_COMMIT_SHORT_SHA student-project/backend-csharp/StudentApi
     - docker push $IMAGE_CSHARP:$CI_COMMIT_SHORT_SHA
@@ -94,6 +94,8 @@ push:csharp:
 push:java:
   stage: push
   script:
+    - echo "Login to GitLab registry..."
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - echo "Building & pushing Java image..."
     - docker build -t $IMAGE_JAVA:$CI_COMMIT_SHORT_SHA student-project/backend-springboot
     - docker push $IMAGE_JAVA:$CI_COMMIT_SHORT_SHA
@@ -101,6 +103,8 @@ push:java:
 push:node:
   stage: push
   script:
+    - echo "Login to GitLab registry..."
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - echo "Building & pushing Node image..."
     - docker build -t $IMAGE_NODE:$CI_COMMIT_SHORT_SHA student-project/backend-nodejs
     - docker push $IMAGE_NODE:$CI_COMMIT_SHORT_SHA
