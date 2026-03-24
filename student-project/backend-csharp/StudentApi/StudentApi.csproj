@@ -15,6 +15,9 @@
 
     <!-- Swagger / OpenAPI -->
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
+
+    <!-- Rate Limiting -->
+    <PackageReference Include="Microsoft.AspNetCore.RateLimiting" Version="7.0.14" />
   </ItemGroup>
 
 </Project>
