@@ -75,7 +75,7 @@ test:springboot:
 
 push:frontend:
   stage: push
-  image: null
+  image: ""
   services: []
   script:
     - echo "Login to GitLab registry..."
@@ -86,7 +86,7 @@ push:frontend:
 
 push:csharp:
   stage: push
-  image: null
+  image: ""
   services: []
   script:
     - echo "Login to GitLab registry..."
@@ -97,7 +97,7 @@ push:csharp:
 
 push:java:
   stage: push
-  image: null
+  image: ""
   services: []
   script:
     - echo "Login to GitLab registry..."
@@ -108,7 +108,7 @@ push:java:
 
 push:node:
   stage: push
-  image: null
+  image: ""
   services: []
   script:
     - echo "Login to GitLab registry..."
