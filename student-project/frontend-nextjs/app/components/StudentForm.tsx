@@ -2,7 +2,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { StudentFormData, studentSchema, validateStudent } from "@/app/lib/validations";
+import { StudentFormData, validateStudent } from "@/app/lib/validations";
 
 interface StudentFormProps {
   initialData?: StudentFormData;

@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "t6fP8UBfNAPrYHxpKpOTBzltHEAEh5sIDySOXJNkOEUoIvUrqnzcaKppZEpQWpo/O6K8IpiL148sZENx0J6dxQ==",
+  "dgSpecHash": "3kVxk7HW6YCoRPJWvkUqVn27vs1SaxfLUV29D3ypNLFcJn+QhFc7vvXjmjaU53CgXPrrHxe/PmUQOF94rkA29g==",
   "success": true,
   "projectFilePath": "/home/imhotep/efrei/projet_DevOps/student-project/backend-csharp/StudentApi/StudentApi.csproj",
   "expectedPackageFiles": [
@@ -36,7 +36,8 @@
     "/home/imhotep/.nuget/packages/swashbuckle.aspnetcore.swaggerui/6.5.0/swashbuckle.aspnetcore.swaggerui.6.5.0.nupkg.sha512",
     "/home/imhotep/.nuget/packages/system.codedom/4.4.0/system.codedom.4.4.0.nupkg.sha512",
     "/home/imhotep/.nuget/packages/system.text.encodings.web/7.0.0/system.text.encodings.web.7.0.0.nupkg.sha512",
-    "/home/imhotep/.nuget/packages/system.text.json/7.0.0/system.text.json.7.0.0.nupkg.sha512"
+    "/home/imhotep/.nuget/packages/system.text.json/7.0.0/system.text.json.7.0.0.nupkg.sha512",
+    "/home/imhotep/.nuget/packages/system.threading.ratelimiting/7.0.0/system.threading.ratelimiting.7.0.0.nupkg.sha512"
   ],
   "logs": []
 }
