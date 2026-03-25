@@ -43,26 +43,6 @@ builder.Services.AddCors(options =>
               .AllowCredentials());
 });
 
-// ── Rate Limiting ────────────────────────────────────────────────────────────
-builder.Services.AddRateLimiter(options =>
-{
-    options.AddFixedWindowLimiter(policyName: "general", limiter =>
-    {
-        limiter.PermitLimit = 100;
-        limiter.Window = TimeSpan.FromMinutes(15);
-        limiter.QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst;
-        limiter.QueueLimit = 0;
-    });
-
-    options.AddFixedWindowLimiter(policyName: "strict", limiter =>
-    {
-        limiter.PermitLimit = 30;
-        limiter.Window = TimeSpan.FromMinutes(15);
-        limiter.QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst;
-        limiter.QueueLimit = 0;
-    });
-});
-
 // ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -101,9 +81,6 @@ using (var scope = app.Services.CreateScope())
 
 // ── Middleware pipeline ───────────────────────────────────────────────────────
 app.UseCors("AllowFrontend");
-
-// Apply rate limiting
-app.UseRateLimiter();
 
 // Swagger always enabled (useful in all envs for this project)
 app.UseSwagger();
