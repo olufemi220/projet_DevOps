@@ -1,182 +1,477 @@
-stages:
-  - build
-  - test
-  - push
-  - deploy
+# ==============================================================================
+# .gitlab-ci.yml — Student Management Micro-services
+# Author : Group Project — EFREI 2025-2026
+# Description : Full CI/CD pipeline — Build, Test, Push, Deploy
+#               Multi-environment : DEV | UAT | PRD
+# ==============================================================================
 
-# Docker global config
-image: docker:24.0.5
-
-services:
-  - docker:24.0.5-dind
-
+# ---------------------------------------------------------------------------
+# Global variables (overridden per environment in each job)
+# ---------------------------------------------------------------------------
 variables:
-  DOCKER_TLS_CERTDIR: ""
-  IMAGE_FRONTEND: $CI_REGISTRY_IMAGE/frontend
-  IMAGE_CSHARP: $CI_REGISTRY_IMAGE/backend-csharp
-  IMAGE_JAVA: $CI_REGISTRY_IMAGE/backend-java
-  IMAGE_NODE: $CI_REGISTRY_IMAGE/backend-node
+  # Docker registry — uses GitLab's built-in Container Registry
+  REGISTRY: $CI_REGISTRY
+  IMAGE_PREFIX: $CI_REGISTRY_IMAGE
 
-# Global cache configuration
-cache:
-  paths:
-    - node_modules/
-    - student-project/backend-nodejs/node_modules/
-    - student-project/backend-springboot/.m2/
+  # Application image names
+  IMAGE_FRONTEND:   "$CI_REGISTRY_IMAGE/frontend"
+  IMAGE_DOTNET:     "$CI_REGISTRY_IMAGE/backend-dotnet"
+  IMAGE_SPRINGBOOT: "$CI_REGISTRY_IMAGE/backend-springboot"
+  IMAGE_NODE:       "$CI_REGISTRY_IMAGE/backend-node"
 
-# ─────────────────────────────────────────
-# BUILD
-# ─────────────────────────────────────────
+  # Docker build cache options
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
 
+  # Default image tag = branch slug (e.g. main, develop, feature-xxx)
+  TAG: $CI_COMMIT_REF_SLUG
+
+# ---------------------------------------------------------------------------
+# Pipeline stages — executed in order
+# ---------------------------------------------------------------------------
+stages:
+  - build       # Compile source code for all services
+  - test        # Run linting and unit tests
+  - push        # Build Docker images and push to registry
+  - deploy      # Deploy to the target environment (manual gate for UAT/PRD)
+
+# ---------------------------------------------------------------------------
+# Reusable YAML anchors
+# ---------------------------------------------------------------------------
+
+# Default runner tags — all jobs run on a self-hosted GitLab Runner
+.default_tags: &default_tags
+  tags:
+    - linux
+    - docker
+    - shell
+    - efrei_project
+
+# Template for Docker-in-Docker jobs (push stage)
+.dind_config: &dind_config
+  image: docker:24
+  services:
+    - name: docker:24-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_CERT_PATH: "/certs/client"
+    DOCKER_TLS_VERIFY: "1"
+
+# ==============================================================================
+# STAGE 1 — BUILD
+# Compiles each service and saves artifacts for the test & push stages
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Build — Frontend (Next.js)
+# ------------------------------------------------------------------------------
 build:frontend:
   stage: build
-  image: node:20
+  <<: *default_tags
+  image: node:18-alpine
   script:
-    - echo "Building Frontend..."
-    - cd student-project/frontend-nextjs
-    - npm install
+    - echo "==> Installing dependencies for frontend"
+    - cd frontend
+    - npm ci --prefer-offline
+    - echo "==> Building Next.js production bundle"
     - npm run build
+  artifacts:
+    paths:
+      - frontend/.next/          # Next.js build output
+      - frontend/node_modules/   # Keep modules for test stage
+    expire_in: 1 hour
+  cache:
+    key: "$CI_COMMIT_REF_SLUG-frontend"
+    paths:
+      - frontend/node_modules/
+  rules:
+    - changes:
+        - frontend/**/*
 
-build:csharp:
+# ------------------------------------------------------------------------------
+# Build — Backend C# (ASP.NET Core 7)
+# ------------------------------------------------------------------------------
+build:dotnet:
   stage: build
+  <<: *default_tags
   image: mcr.microsoft.com/dotnet/sdk:7.0
   script:
-    - echo "Building C# backend..."
-    - cd student-project/backend-csharp/StudentApi
+    - echo "==> Restoring NuGet packages"
+    - cd backend-dotnet
     - dotnet restore
-    - dotnet build -c Release
-    - dotnet publish -c Release -o ./publish
+    - echo "==> Building C# project in Release mode"
+    - dotnet build --configuration Release --no-restore
+    - echo "==> Publishing C# project"
+    - dotnet publish --configuration Release --no-build --output ./publish
   artifacts:
     paths:
-      - student-project/backend-csharp/StudentApi/publish/
-    expire_in: 1 week
-    when: on_success
+      - backend-dotnet/publish/
+    expire_in: 1 hour
+  rules:
+    - changes:
+        - backend-dotnet/**/*
 
+# ------------------------------------------------------------------------------
+# Build — Backend Java (Spring Boot 3.1)
+# ------------------------------------------------------------------------------
 build:springboot:
   stage: build
+  <<: *default_tags
   image: maven:3.9-eclipse-temurin-17
   script:
-    - echo "Building Java backend..."
-    - cd student-project/backend-springboot
-    - mvn clean package -DskipTests
+    - echo "==> Building Spring Boot project with Maven"
+    - cd backend-springboot
+    - mvn clean package -DskipTests --batch-mode
   artifacts:
     paths:
-      - student-project/backend-springboot/target/
-    expire_in: 1 week
-    when: on_success
+      - backend-springboot/target/*.jar
+    expire_in: 1 hour
+  cache:
+    key: "$CI_COMMIT_REF_SLUG-maven"
+    paths:
+      - backend-springboot/.m2/
+  rules:
+    - changes:
+        - backend-springboot/**/*
 
+# ------------------------------------------------------------------------------
+# Build — Backend Node.js (Express 18+)
+# ------------------------------------------------------------------------------
 build:node:
   stage: build
-  image: node:20
+  <<: *default_tags
+  image: node:18-alpine
   script:
-    - echo "Building Node.js backend..."
-    - cd student-project/backend-nodejs
-    - npm install
-    - npm run build || true
+    - echo "==> Installing dependencies for Node.js backend"
+    - cd backend-node
+    - npm ci --prefer-offline
+    - echo "==> Node.js backend — no separate build step needed (runtime)"
   artifacts:
     paths:
-      - student-project/backend-nodejs/node_modules/
-    expire_in: 1 week
-    when: on_success
+      - backend-node/node_modules/
+    expire_in: 1 hour
+  cache:
+    key: "$CI_COMMIT_REF_SLUG-node"
+    paths:
+      - backend-node/node_modules/
+  rules:
+    - changes:
+        - backend-node/**/*
 
-# ─────────────────────────────────────────
-# TEST
-# ─────────────────────────────────────────
+# ==============================================================================
+# STAGE 2 — TEST
+# Linting, unit tests and static analysis
+# ==============================================================================
 
+# ------------------------------------------------------------------------------
+# Test — Frontend linting (ESLint)
+# ------------------------------------------------------------------------------
 test:frontend:
   stage: test
-  image: node:20
+  <<: *default_tags
+  image: node:18-alpine
+  needs: ["build:frontend"]
   script:
-    - echo "Testing frontend..."
-    - cd student-project/frontend-nextjs
-    - npm install
-    - npm run lint || true
+    - echo "==> Running ESLint on frontend code"
+    - cd frontend
+    - npm run lint
+  rules:
+    - changes:
+        - frontend/**/*
 
+# ------------------------------------------------------------------------------
+# Test — Spring Boot unit tests (JUnit 5 via Maven)
+# ------------------------------------------------------------------------------
 test:springboot:
   stage: test
+  <<: *default_tags
   image: maven:3.9-eclipse-temurin-17
+  needs: ["build:springboot"]
   script:
-    - echo "Running Java tests..."
-    - cd student-project/backend-springboot
-    - mvn test
+    - echo "==> Running JUnit tests for Spring Boot"
+    - cd backend-springboot
+    - mvn test --batch-mode
+  artifacts:
+    reports:
+      junit: backend-springboot/target/surefire-reports/TEST-*.xml
+    paths:
+      - backend-springboot/target/surefire-reports/
+    expire_in: 7 days
+  cache:
+    key: "$CI_COMMIT_REF_SLUG-maven"
+    paths:
+      - backend-springboot/.m2/
+  rules:
+    - changes:
+        - backend-springboot/**/*
 
-# ─────────────────────────────────────────
-# PUSH (Docker images)
-# ─────────────────────────────────────────
+# ------------------------------------------------------------------------------
+# Test — Node.js (basic smoke test / npm test)
+# ------------------------------------------------------------------------------
+test:node:
+  stage: test
+  <<: *default_tags
+  image: node:18-alpine
+  needs: ["build:node"]
+  script:
+    - echo "==> Running Node.js tests"
+    - cd backend-node
+    - npm test --if-present
+  rules:
+    - changes:
+        - backend-node/**/*
 
+# ==============================================================================
+# STAGE 3 — PUSH
+# Build multi-stage Docker images and push to GitLab Container Registry
+# Only runs on main / develop branches or when a tag is pushed
+# ==============================================================================
+
+# Template shared by all push jobs
+.push_template:
+  stage: push
+  <<: *dind_config
+  <<: *default_tags
+  before_script:
+    - echo "==> Logging in to GitLab Container Registry"
+    - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY
+        --username "$CI_REGISTRY_USER" --password-stdin
+  after_script:
+    - docker logout $CI_REGISTRY
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_COMMIT_TAG'
+
+# ------------------------------------------------------------------------------
+# Push — Frontend Docker image
+# ------------------------------------------------------------------------------
 push:frontend:
-  stage: push
+  extends: .push_template
+  needs: ["build:frontend", "test:frontend"]
   script:
-    - echo "Login to GitLab registry..."
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - echo "Building & pushing frontend image..."
-    - docker build -t $IMAGE_FRONTEND:$CI_COMMIT_SHORT_SHA student-project/frontend-nextjs
-    - docker build -t $IMAGE_FRONTEND:latest student-project/frontend-nextjs
-    - docker push $IMAGE_FRONTEND:$CI_COMMIT_SHORT_SHA
-    - docker push $IMAGE_FRONTEND:latest
+    - echo "==> Building Docker image for frontend"
+    - docker build
+        --cache-from "$IMAGE_FRONTEND:latest"
+        --tag "$IMAGE_FRONTEND:$TAG"
+        --tag "$IMAGE_FRONTEND:latest"
+        ./frontend
+    - echo "==> Pushing frontend image to registry"
+    - docker push "$IMAGE_FRONTEND:$TAG"
+    - docker push "$IMAGE_FRONTEND:latest"
 
-push:csharp:
-  stage: push
+# ------------------------------------------------------------------------------
+# Push — C# Backend Docker image
+# ------------------------------------------------------------------------------
+push:dotnet:
+  extends: .push_template
+  needs: ["build:dotnet"]
   script:
-    - echo "Login to GitLab registry..."
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - echo "Building & pushing C# image..."
-    - docker build -t $IMAGE_CSHARP:$CI_COMMIT_SHORT_SHA student-project/backend-csharp/StudentApi
-    - docker build -t $IMAGE_CSHARP:latest student-project/backend-csharp/StudentApi
-    - docker push $IMAGE_CSHARP:$CI_COMMIT_SHORT_SHA
-    - docker push $IMAGE_CSHARP:latest
+    - echo "==> Building Docker image for C# backend"
+    - docker build
+        --cache-from "$IMAGE_DOTNET:latest"
+        --tag "$IMAGE_DOTNET:$TAG"
+        --tag "$IMAGE_DOTNET:latest"
+        ./backend-dotnet
+    - echo "==> Pushing C# image to registry"
+    - docker push "$IMAGE_DOTNET:$TAG"
+    - docker push "$IMAGE_DOTNET:latest"
 
-push:java:
-  stage: push
+# ------------------------------------------------------------------------------
+# Push — Spring Boot Backend Docker image
+# ------------------------------------------------------------------------------
+push:springboot:
+  extends: .push_template
+  needs: ["build:springboot", "test:springboot"]
   script:
-    - echo "Login to GitLab registry..."
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - echo "Building & pushing Java image..."
-    - docker build -t $IMAGE_JAVA:$CI_COMMIT_SHORT_SHA student-project/backend-springboot
-    - docker build -t $IMAGE_JAVA:latest student-project/backend-springboot
-    - docker push $IMAGE_JAVA:$CI_COMMIT_SHORT_SHA
-    - docker push $IMAGE_JAVA:latest
+    - echo "==> Building Docker image for Spring Boot backend"
+    - docker build
+        --cache-from "$IMAGE_SPRINGBOOT:latest"
+        --tag "$IMAGE_SPRINGBOOT:$TAG"
+        --tag "$IMAGE_SPRINGBOOT:latest"
+        ./backend-springboot
+    - echo "==> Pushing Spring Boot image to registry"
+    - docker push "$IMAGE_SPRINGBOOT:$TAG"
+    - docker push "$IMAGE_SPRINGBOOT:latest"
 
+# ------------------------------------------------------------------------------
+# Push — Node.js Backend Docker image
+# ------------------------------------------------------------------------------
 push:node:
-  stage: push
-  retry:
-    max: 2
-    when:
-      - runner_system_failure
-      - stuck_or_timeout_failure
+  extends: .push_template
+  needs: ["build:node", "test:node"]
   script:
-    - echo "Login to GitLab registry..."
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - echo "Building & pushing Node image..."
-    - docker build -t $IMAGE_NODE:$CI_COMMIT_SHORT_SHA student-project/backend-nodejs
-    - docker build -t $IMAGE_NODE:latest student-project/backend-nodejs
-    - docker push $IMAGE_NODE:$CI_COMMIT_SHORT_SHA
-    - docker push $IMAGE_NODE:latest
+    - echo "==> Building Docker image for Node.js backend"
+    - docker build
+        --cache-from "$IMAGE_NODE:latest"
+        --tag "$IMAGE_NODE:$TAG"
+        --tag "$IMAGE_NODE:latest"
+        ./backend-node
+    - echo "==> Pushing Node.js image to registry"
+    - docker push "$IMAGE_NODE:$TAG"
+    - docker push "$IMAGE_NODE:latest"
 
-# ─────────────────────────────────────────
-# DEPLOY
-# ─────────────────────────────────────────
+# ==============================================================================
+# STAGE 4 — DEPLOY
+# Deploy to DEV (automatic), UAT (manual), PRD (manual + protected)
+#
+# Port convention (from cahier des charges) :
+#   PRD  → base port  (frontend: 3000 | node: 4000 | dotnet: 5000 | java: 8080)
+#   UAT  → base + 10  (frontend: 3010 | node: 4010 | dotnet: 5010 | java: 8090)
+#   DEV  → base + 20  (frontend: 3020 | node: 4020 | dotnet: 5020 | java: 8100)
+# ==============================================================================
 
+# ------------------------------------------------------------------------------
+# Deploy — DEV (automatic on every push to develop branch)
+# Uses docker-compose.dev.yml
+# ------------------------------------------------------------------------------
 deploy:dev:
   stage: deploy
+  <<: *default_tags
+  needs: ["push:frontend", "push:dotnet", "push:springboot", "push:node"]
+  environment:
+    name: development
+    url: http://localhost:3020
+  variables:
+    ENV_NAME: "DEV"
+    COMPOSE_FILE: "docker-compose.dev.yml"
+    FRONTEND_PORT: "3020"
+    NODE_PORT: "4020"
+    DOTNET_PORT: "5020"
+    JAVA_PORT: "8100"
+    DB_NAME: "StudentManagement_Dev"
   script:
-    - echo "Deploying to DEV..."
-  only:
-    - develop
-  when: manual
+    - echo "==> Deploying to DEV environment"
+    - echo "    Compose file  : $COMPOSE_FILE"
+    - echo "    Frontend port : $FRONTEND_PORT"
+    - echo "    DB name       : $DB_NAME"
+    # Pull latest images from registry
+    - docker login $CI_REGISTRY
+        --username "$CI_REGISTRY_USER"
+        --password "$CI_REGISTRY_PASSWORD"
+    - docker-compose -f $COMPOSE_FILE pull
+    # Recreate containers without downtime (--no-deps prevents cascading restarts)
+    - docker-compose -f $COMPOSE_FILE up -d --force-recreate --remove-orphans
+    - echo "==> DEV deployment complete — http://localhost:$FRONTEND_PORT"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop"'
 
+# ------------------------------------------------------------------------------
+# Deploy — UAT (manual trigger, only from develop or main)
+# Uses docker-compose.uat.yml
+# ------------------------------------------------------------------------------
 deploy:uat:
   stage: deploy
+  <<: *default_tags
+  needs: ["push:frontend", "push:dotnet", "push:springboot", "push:node"]
+  environment:
+    name: uat
+    url: http://localhost:3010
+  variables:
+    ENV_NAME: "UAT"
+    COMPOSE_FILE: "docker-compose.uat.yml"
+    FRONTEND_PORT: "3010"
+    NODE_PORT: "4010"
+    DOTNET_PORT: "5010"
+    JAVA_PORT: "8090"
+    DB_NAME: "StudentManagement_UAT"
   script:
-    - echo "Deploying to UAT..."
-  only:
-    - main
-  when: manual
+    - echo "==> Deploying to UAT environment"
+    - echo "    Compose file  : $COMPOSE_FILE"
+    - echo "    Frontend port : $FRONTEND_PORT"
+    - echo "    DB name       : $DB_NAME"
+    - docker login $CI_REGISTRY
+        --username "$CI_REGISTRY_USER"
+        --password "$CI_REGISTRY_PASSWORD"
+    - docker-compose -f $COMPOSE_FILE pull
+    - docker-compose -f $COMPOSE_FILE up -d --force-recreate --remove-orphans
+    - echo "==> UAT deployment complete — http://localhost:$FRONTEND_PORT"
+  when: manual   # Must be triggered manually in GitLab UI
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
 
-deploy:prd:
+# ------------------------------------------------------------------------------
+# Deploy — PRD via Docker Compose (manual, protected — main branch only)
+# Uses docker-compose.yml (production compose file)
+# ------------------------------------------------------------------------------
+deploy:prd:docker-compose:
   stage: deploy
+  <<: *default_tags
+  needs: ["push:frontend", "push:dotnet", "push:springboot", "push:node"]
+  environment:
+    name: production
+    url: http://localhost:3000
+  variables:
+    ENV_NAME: "PRD"
+    COMPOSE_FILE: "docker-compose.yml"
+    FRONTEND_PORT: "3000"
+    NODE_PORT: "4000"
+    DOTNET_PORT: "5000"
+    JAVA_PORT: "8080"
+    DB_NAME: "StudentManagement_PRD"
   script:
-    - echo "Deploying to PRD..."
-  only:
-    - main
+    - echo "==> Deploying to PRODUCTION via Docker Compose"
+    - docker login $CI_REGISTRY
+        --username "$CI_REGISTRY_USER"
+        --password "$CI_REGISTRY_PASSWORD"
+    - docker-compose -f $COMPOSE_FILE pull
+    - docker-compose -f $COMPOSE_FILE up -d --force-recreate --remove-orphans
+    # Basic smoke test — wait for frontend to respond
+    - echo "==> Waiting for services to become healthy..."
+    - sleep 20
+    - curl --fail --silent --max-time 10 http://localhost:$FRONTEND_PORT
+        || (echo "ERROR: Frontend health check failed" && exit 1)
+    - curl --fail --silent --max-time 10
+        http://localhost:$DOTNET_PORT/api/students
+        || (echo "ERROR: C# API health check failed" && exit 1)
+    - curl --fail --silent --max-time 10
+        http://localhost:$JAVA_PORT/api/students
+        || (echo "ERROR: Java API health check failed" && exit 1)
+    - curl --fail --silent --max-time 10
+        http://localhost:$NODE_PORT/api/students
+        || (echo "ERROR: Node API health check failed" && exit 1)
+    - echo "==> All health checks passed — PRD is live!"
   when: manual
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+# ------------------------------------------------------------------------------
+# Deploy — PRD via Kubernetes / Minikube (manual, main branch only)
+# Applies kubernetes/manifest.yaml
+# ------------------------------------------------------------------------------
+deploy:prd:minikube:
+  stage: deploy
+  <<: *default_tags
+  needs: ["push:frontend", "push:dotnet", "push:springboot", "push:node"]
+  environment:
+    name: production-k8s
+    url: http://localhost:3000
+  variables:
+    NAMESPACE: "student-management"
+  script:
+    - echo "==> Applying Kubernetes manifests to Minikube"
+    # Update image tags in manifest with current commit tag
+    - sed -i "s|IMAGE_FRONTEND|$IMAGE_FRONTEND:$TAG|g"     kubernetes/manifest.yaml
+    - sed -i "s|IMAGE_DOTNET|$IMAGE_DOTNET:$TAG|g"         kubernetes/manifest.yaml
+    - sed -i "s|IMAGE_SPRINGBOOT|$IMAGE_SPRINGBOOT:$TAG|g" kubernetes/manifest.yaml
+    - sed -i "s|IMAGE_NODE|$IMAGE_NODE:$TAG|g"             kubernetes/manifest.yaml
+    # Apply manifests
+    - kubectl apply -f kubernetes/manifest.yaml
+    # Wait for all deployments to be ready
+    - echo "==> Waiting for deployments to roll out..."
+    - kubectl rollout status deployment/frontend
+        -n $NAMESPACE --timeout=120s
+    - kubectl rollout status deployment/backend-dotnet
+        -n $NAMESPACE --timeout=120s
+    - kubectl rollout status deployment/backend-springboot
+        -n $NAMESPACE --timeout=120s
+    - kubectl rollout status deployment/backend-node
+        -n $NAMESPACE --timeout=120s
+    - echo "==> Kubernetes deployment complete!"
+    - kubectl get pods -n $NAMESPACE
+  when: manual
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
