@@ -81,14 +81,15 @@ docker compose up -d mysql backend-csharp-dev backend-java-dev backend-node-dev 
 kubectl apply -f k8s/
 ```
 
-## 🌐 URLs
+## 🌐 Environments & URLs
 
-| Service | DEV | UAT | PRD |
+| Service | DEV (Base) | UAT (Base+10) | PRD (Base+20) |
 |---|---|---|---|
-| Frontend | localhost:3020 | localhost:3010 | localhost:3000 |
-| API C# | localhost:5020 | localhost:5010 | localhost:5000 |
-| API Java | localhost:8100 | localhost:8090 | localhost:8080 |
-| API Node | localhost:4020 | localhost:4010 | localhost:4000 |
+| Frontend | localhost:3000 | localhost:3010 | localhost:3020 |
+| API C# | localhost:5000 | localhost:5010 | localhost:5020 |
+| API Java | localhost:8080 | localhost:8090 | localhost:8100 |
+| API Node | localhost:4000 | localhost:4010 | localhost:4020 |
+| MySQL | localhost:3306 | localhost:3316 | localhost:3326 |
 
 ---
 Développé par le Groupe DevOps — EFREI Paris 2026

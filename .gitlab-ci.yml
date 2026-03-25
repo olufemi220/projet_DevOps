@@ -2,7 +2,9 @@ stages:
   - build
   - test
   - push
-  - deploy
+  - deploy:dev
+  - deploy:uat
+  - deploy:prd
 
 # Docker global config
 image: docker:24.0.5
@@ -10,15 +12,43 @@ image: docker:24.0.5
 services:
   - docker:24.0.5-dind
 
+# ═════════════════════════════════════════════════════
+# ENVIRONMENT VARIABLES - 3 Environments Configuration
+# ═════════════════════════════════════════════════════
 variables:
   DOCKER_TLS_CERTDIR: ""
   IMAGE_FRONTEND: $CI_REGISTRY_IMAGE/frontend
   IMAGE_CSHARP: $CI_REGISTRY_IMAGE/backend-csharp
   IMAGE_JAVA: $CI_REGISTRY_IMAGE/backend-java
   IMAGE_NODE: $CI_REGISTRY_IMAGE/backend-node
-  # Prevent shell profile issues on WSL executor
   BASH_ENV: ""
   CI: "true"
+  
+  # DEV Environment (Base ports) - Running on local machine
+  DEV_FRONTEND_PORT: "3000"
+  DEV_CSHARP_PORT: "5000"
+  DEV_JAVA_PORT: "8080"
+  DEV_NODE_PORT: "4000"
+  DEV_DB_PORT: "3306"
+  DEV_DB_NAME: "StudentManagement_Dev"
+  
+  # UAT Environment (Base ports + 10) - Kubernetes
+  UAT_FRONTEND_PORT: "3010"
+  UAT_CSHARP_PORT: "5010"
+  UAT_JAVA_PORT: "8090"
+  UAT_NODE_PORT: "4010"
+  UAT_DB_PORT: "3316"
+  UAT_DB_NAME: "StudentManagement_UAT"
+  UAT_NAMESPACE: "student-management-uat"
+  
+  # PRD Environment (Base ports + 20) - Kubernetes
+  PRD_FRONTEND_PORT: "3020"
+  PRD_CSHARP_PORT: "5020"
+  PRD_JAVA_PORT: "8100"
+  PRD_NODE_PORT: "4020"
+  PRD_DB_PORT: "3326"
+  PRD_DB_NAME: "StudentManagement_Prod"
+  PRD_NAMESPACE: "student-management-prd"
 
 # Global cache configuration - minimal to avoid conflicts
 cache:
@@ -169,100 +199,185 @@ push:node:
     - docker push $IMAGE_NODE:$CI_COMMIT_SHORT_SHA
     - docker push $IMAGE_NODE:latest
 
-# ─────────────────────────────────────────
-# DEPLOY
-# ─────────────────────────────────────────
+# ═════════════════════════════════════════════════════════════════
+# DEPLOY STAGE 1: DEVELOPMENT (Docker Compose) - Base Ports
+# ═════════════════════════════════════════════════════════════════
 
-# Deploy DEV environment (Docker Compose)
 deploy:dev:
-  stage: deploy
+  stage: deploy:dev
   image: docker:24.0.5
   services:
     - docker:24.0.5-dind
-  script:
-    - echo "Deploying to DEV using Docker Compose..."
-    - docker-compose -f docker-compose.yml up -d
-    - echo "Waiting for services to be healthy..."
-    - sleep 10
-    - docker-compose ps
-    - echo "DEV deployment completed successfully"
-  only:
-    - develop
-  when: manual
   environment:
     name: development
     url: http://localhost:3000
-
-# Deploy UAT environment (Kubernetes)
-deploy:uat:
-  stage: deploy
-  image: bitnami/kubectl:latest
   script:
-    - echo "Deploying to UAT (Kubernetes)..."
-    - kubectl config current-context
-    - kubectl create namespace student-management --dry-run=client -o yaml | kubectl apply -f -
-    - echo "Applying Kubernetes Secrets and ConfigMaps..."
-    - kubectl apply -f k8s/secrets.yaml
-    - kubectl apply -f k8s/mysql-configmap.yaml
-    - echo "Applying NetworkPolicy for security..."
-    - kubectl apply -f k8s/network-policy.yaml
-    - echo "Applying core infrastructure..."
-    - kubectl apply -f k8s/namespace.yaml
-    - kubectl apply -f k8s/mysql-statefulset.yaml
-    - echo "Applying backend services..."
-    - kubectl apply -f k8s/backend-csharp.yaml
-    - kubectl apply -f k8s/backend-java.yaml
-    - kubectl apply -f k8s/backend-node.yaml
-    - echo "Applying frontend service..."
-    - kubectl apply -f k8s/frontend.yaml
-    - echo "Waiting for deployments to be ready..."
-    - kubectl rollout status deployment/frontend -n student-management --timeout=5m
-    - kubectl rollout status deployment/backend-csharp -n student-management --timeout=5m
-    - kubectl rollout status deployment/backend-java -n student-management --timeout=5m
-    - kubectl rollout status deployment/backend-node -n student-management --timeout=5m
-    - echo "UAT deployment completed successfully"
-    - kubectl get pods -n student-management
+    - echo "▶ DEV DEPLOYMENT STARTED"
+    - echo "═══════════════════════════════════════════"
+    - echo "Environment: DEVELOPMENT (Docker Compose)"
+    - echo "Frontend Port: $DEV_FRONTEND_PORT"
+    - echo "API C# Port: $DEV_CSHARP_PORT"
+    - echo "API Java Port: $DEV_JAVA_PORT"
+    - echo "API Node Port: $DEV_NODE_PORT"
+    - echo "Database: $DEV_DB_NAME"
+    - echo "═══════════════════════════════════════════"
+    
+    - echo "🐳 Starting Docker Compose services..."
+    - docker-compose -f docker-compose.yml up -d
+    - sleep 15
+    
+    - echo "📊 Service status:"
+    - docker-compose ps
+    
+    - echo "✅ DEV DEPLOYMENT COMPLETED"
+    - echo "🌐 Access URLs:"
+    - echo "  Frontend: http://localhost:$DEV_FRONTEND_PORT"
+    - echo "  API C#:   http://localhost:$DEV_CSHARP_PORT/swagger"
+    - echo "  API Java: http://localhost:$DEV_JAVA_PORT/swagger-ui.html"
+    - echo "  API Node: http://localhost:$DEV_NODE_PORT/api-docs"
   only:
-    - main
+    - develop
   when: manual
+  retry: 2
+
+# ─────────────────────────────────────────────────────────────────
+
+# ═════════════════════════════════════════════════════════════════
+# DEPLOY STAGE 2: STAGING/UAT (Kubernetes) - Base Ports + 10
+# ═════════════════════════════════════════════════════════════════
+
+deploy:uat:
+  stage: deploy:uat
+  image: bitnami/kubectl:latest
   environment:
     name: staging
+    url: https://students-uat.example.com
     kubernetes:
-      namespace: student-management
-
-# Deploy PRD environment (Kubernetes)
-deploy:prd:
-  stage: deploy
-  image: bitnami/kubectl:latest
+      namespace: $UAT_NAMESPACE
   script:
-    - echo "Deploying to PRD (Kubernetes)..."
+    - echo "▶ UAT DEPLOYMENT STARTED"
+    - echo "═══════════════════════════════════════════"
+    - echo "Environment: UAT/STAGING (Kubernetes)"
+    - echo "Namespace: $UAT_NAMESPACE"
+    - echo "Frontend Port: $UAT_FRONTEND_PORT"
+    - echo "API C# Port: $UAT_CSHARP_PORT"
+    - echo "API Java Port: $UAT_JAVA_PORT"
+    - echo "API Node Port: $UAT_NODE_PORT"
+    - echo "Database: $UAT_DB_NAME"
+    - echo "═══════════════════════════════════════════"
+    
+    - echo "🔐 Kubernetes cluster info:"
     - kubectl config current-context
-    - kubectl create namespace student-management --dry-run=client -o yaml | kubectl apply -f -
-    - echo "Applying production Kubernetes Secrets and ConfigMaps..."
-    - kubectl apply -f k8s/secrets.yaml
-    - kubectl apply -f k8s/mysql-configmap.yaml
-    - echo "Applying NetworkPolicy for security..."
-    - kubectl apply -f k8s/network-policy.yaml
-    - echo "Applying core infrastructure..."
+    - kubectl cluster-info
+    
+    - echo "📦 Creating namespace..."
+    - kubectl create namespace $UAT_NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+    
+    - echo "🔑 Applying Secrets and ConfigMaps..."
+    - kubectl apply -f k8s/secrets.yaml -n $UAT_NAMESPACE
+    - kubectl apply -f k8s/mysql-configmap.yaml -n $UAT_NAMESPACE
+    
+    - echo "🔒 Applying NetworkPolicy for security..."
+    - kubectl apply -f k8s/network-policy.yaml -n $UAT_NAMESPACE
+    
+    - echo "📊 Deploying core infrastructure..."
     - kubectl apply -f k8s/namespace.yaml
-    - kubectl apply -f k8s/mysql-statefulset.yaml
-    - echo "Applying backend services..."
-    - kubectl apply -f k8s/backend-csharp.yaml
-    - kubectl apply -f k8s/backend-java.yaml
-    - kubectl apply -f k8s/backend-node.yaml
-    - echo "Applying frontend service..."
-    - kubectl apply -f k8s/frontend.yaml
-    - echo "Performing rolling update..."
-    - kubectl rollout status deployment/frontend -n student-management --timeout=5m
-    - kubectl rollout status deployment/backend-csharp -n student-management --timeout=5m
-    - kubectl rollout status deployment/backend-java -n student-management --timeout=5m
-    - kubectl rollout status deployment/backend-node -n student-management --timeout=5m
-    - echo "Production deployment completed successfully"
-    - kubectl get pods -n student-management
+    - kubectl apply -f k8s/mysql-statefulset.yaml -n $UAT_NAMESPACE
+    
+    - echo "🚀 Deploying backend services..."
+    - kubectl apply -f k8s/backend-csharp.yaml -n $UAT_NAMESPACE
+    - kubectl apply -f k8s/backend-java.yaml -n $UAT_NAMESPACE
+    - kubectl apply -f k8s/backend-node.yaml -n $UAT_NAMESPACE
+    
+    - echo "🎨 Deploying frontend service..."
+    - kubectl apply -f k8s/frontend.yaml -n $UAT_NAMESPACE
+    
+    - echo "⏳ Waiting for deployments to be ready (5 min timeout)..."
+    - kubectl rollout status deployment/frontend -n $UAT_NAMESPACE --timeout=5m
+    - kubectl rollout status deployment/backend-csharp -n $UAT_NAMESPACE --timeout=5m
+    - kubectl rollout status deployment/backend-java -n $UAT_NAMESPACE --timeout=5m
+    - kubectl rollout status deployment/backend-node -n $UAT_NAMESPACE --timeout=5m
+    
+    - echo "📋 Pod status:"
+    - kubectl get pods -n $UAT_NAMESPACE
+    
+    - echo "🌐 Service endpoints:"
+    - kubectl get svc -n $UAT_NAMESPACE
+    
+    - echo "✅ UAT DEPLOYMENT COMPLETED"
   only:
     - main
   when: manual
+  retry: 1
+
+# ─────────────────────────────────────────────────────────────────
+
+# ═════════════════════════════════════════════════════════════════
+# DEPLOY STAGE 3: PRODUCTION (Kubernetes) - Base Ports + 20
+# ═════════════════════════════════════════════════════════════════
+
+deploy:prd:
+  stage: deploy:prd
+  image: bitnami/kubectl:latest
   environment:
     name: production
+    url: https://students.example.com
     kubernetes:
-      namespace: student-management
+      namespace: $PRD_NAMESPACE
+  script:
+    - echo "▶ PRODUCTION DEPLOYMENT STARTED"
+    - echo "═══════════════════════════════════════════"
+    - echo "⚠️  PRODUCTION ENVIRONMENT - CRITICAL ⚠️"
+    - echo "Environment: PRODUCTION (Kubernetes)"
+    - echo "Namespace: $PRD_NAMESPACE"
+    - echo "Frontend Port: $PRD_FRONTEND_PORT"
+    - echo "API C# Port: $PRD_CSHARP_PORT"
+    - echo "API Java Port: $PRD_JAVA_PORT"
+    - echo "API Node Port: $PRD_NODE_PORT"
+    - echo "Database: $PRD_DB_NAME"
+    - echo "═══════════════════════════════════════════"
+    
+    - echo "🔐 Kubernetes cluster info:"
+    - kubectl config current-context
+    - kubectl cluster-info
+    
+    - echo "📦 Creating namespace..."
+    - kubectl create namespace $PRD_NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+    
+    - echo "🔑 Applying Secrets and ConfigMaps..."
+    - kubectl apply -f k8s/secrets.yaml -n $PRD_NAMESPACE
+    - kubectl apply -f k8s/mysql-configmap.yaml -n $PRD_NAMESPACE
+    
+    - echo "🔒 Applying NetworkPolicy for security..."
+    - kubectl apply -f k8s/network-policy.yaml -n $PRD_NAMESPACE
+    
+    - echo "📊 Deploying core infrastructure..."
+    - kubectl apply -f k8s/namespace.yaml
+    - kubectl apply -f k8s/mysql-statefulset.yaml -n $PRD_NAMESPACE
+    
+    - echo "🚀 Deploying backend services..."
+    - kubectl apply -f k8s/backend-csharp.yaml -n $PRD_NAMESPACE
+    - kubectl apply -f k8s/backend-java.yaml -n $PRD_NAMESPACE
+    - kubectl apply -f k8s/backend-node.yaml -n $PRD_NAMESPACE
+    
+    - echo "🎨 Deploying frontend service..."
+    - kubectl apply -f k8s/frontend.yaml -n $PRD_NAMESPACE
+    
+    - echo "⏳ Waiting for deployments to be ready (5 min timeout)..."
+    - kubectl rollout status deployment/frontend -n $PRD_NAMESPACE --timeout=5m
+    - kubectl rollout status deployment/backend-csharp -n $PRD_NAMESPACE --timeout=5m
+    - kubectl rollout status deployment/backend-java -n $PRD_NAMESPACE --timeout=5m
+    - kubectl rollout status deployment/backend-node -n $PRD_NAMESPACE --timeout=5m
+    
+    - echo "📋 Pod status:"
+    - kubectl get pods -n $PRD_NAMESPACE
+    
+    - echo "🌐 Service endpoints:"
+    - kubectl get svc -n $PRD_NAMESPACE
+    
+    - echo "✅ PRODUCTION DEPLOYMENT COMPLETED"
+    - echo "⚠️  Monitor logs closely for any errors ⚠️"
+  only:
+    - main
+  when: manual
+  retry: 1
