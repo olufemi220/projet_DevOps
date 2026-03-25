@@ -16,6 +16,9 @@ variables:
   IMAGE_CSHARP: $CI_REGISTRY_IMAGE/backend-csharp
   IMAGE_JAVA: $CI_REGISTRY_IMAGE/backend-java
   IMAGE_NODE: $CI_REGISTRY_IMAGE/backend-node
+  # Prevent shell profile issues on WSL executor
+  BASH_ENV: ""
+  CI: "true"
 
 # Global cache configuration
 cache:
@@ -106,6 +109,9 @@ test:springboot:
 
 push:frontend:
   stage: push
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
   script:
     - echo "Login to GitLab registry..."
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
@@ -117,6 +123,9 @@ push:frontend:
 
 push:csharp:
   stage: push
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
   script:
     - echo "Login to GitLab registry..."
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
@@ -128,6 +137,9 @@ push:csharp:
 
 push:java:
   stage: push
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
   script:
     - echo "Login to GitLab registry..."
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
@@ -139,6 +151,9 @@ push:java:
 
 push:node:
   stage: push
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
   retry:
     max: 2
     when:
