@@ -20,11 +20,9 @@ variables:
   BASH_ENV: ""
   CI: "true"
 
-# Global cache configuration
+# Global cache configuration - minimal to avoid conflicts
 cache:
   paths:
-    - node_modules/
-    - student-project/backend-nodejs/node_modules/
     - student-project/backend-springboot/.m2/
 
 # ─────────────────────────────────────────
@@ -71,11 +69,14 @@ build:springboot:
 build:node:
   stage: build
   image: node:20
+  cache:
+    paths:
+      - student-project/backend-nodejs/node_modules/
   script:
     - echo "Building Node.js backend..."
     - cd student-project/backend-nodejs
     - npm install
-    - npm run build || true
+    - npm run build
   artifacts:
     paths:
       - student-project/backend-nodejs/dist/
