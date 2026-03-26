@@ -4,11 +4,15 @@
 # Description : Full CI/CD pipeline — Build, Test, Push, Deploy
 #               Multi-environment : DEV | UAT | PRD
 #
+# NOTE : Docker-in-Docker (dind) is NOT used here because the runner runs on
+#        WSL which does not support --privileged mode required by dind.
+#        Instead, we bind-mount the host Docker socket directly.
+#
 # Real folder structure :
-#   student-project/frontend-nextjs/          → Next.js frontend  (needs Node 20+)
-#   student-project/backend-csharp/StudentApi → C# ASP.NET Core
-#   student-project/backend-springboot/       → Java Spring Boot
-#   student-project/backend-nodejs/           → Node.js Express
+#   student-project/frontend-nextjs/          → Next.js (requires Node >= 20)
+#   student-project/backend-csharp/StudentApi → C# ASP.NET Core 7
+#   student-project/backend-springboot/       → Java Spring Boot 3.1
+#   student-project/backend-nodejs/           → Node.js Express 18+
 # ==============================================================================
 
 variables:
@@ -16,8 +20,9 @@ variables:
   IMAGE_DOTNET:     "$CI_REGISTRY_IMAGE/backend-dotnet"
   IMAGE_SPRINGBOOT: "$CI_REGISTRY_IMAGE/backend-springboot"
   IMAGE_NODE:       "$CI_REGISTRY_IMAGE/backend-node"
+  # Use host Docker socket — no dind needed
+  DOCKER_HOST: unix:///var/run/docker.sock
   DOCKER_DRIVER: overlay2
-  DOCKER_TLS_CERTDIR: "/certs"
   TAG: $CI_COMMIT_REF_SLUG
 
 stages:
@@ -30,9 +35,6 @@ stages:
 # STAGE 1 — BUILD
 # ==============================================================================
 
-# ------------------------------------------------------------------------------
-# Frontend — Next.js 16 requires Node >= 20.9.0
-# ------------------------------------------------------------------------------
 build:frontend:
   stage: build
   image: node:20-alpine
@@ -57,9 +59,6 @@ build:frontend:
     - if: '$CI_COMMIT_BRANCH == "develop"'
     - if: '$CI_COMMIT_TAG'
 
-# ------------------------------------------------------------------------------
-# C# — ASP.NET Core 7
-# ------------------------------------------------------------------------------
 build:dotnet:
   stage: build
   image: mcr.microsoft.com/dotnet/sdk:7.0
@@ -85,9 +84,6 @@ build:dotnet:
     - if: '$CI_COMMIT_BRANCH == "develop"'
     - if: '$CI_COMMIT_TAG'
 
-# ------------------------------------------------------------------------------
-# Java — Spring Boot 3.1 / Maven
-# ------------------------------------------------------------------------------
 build:springboot:
   stage: build
   image: maven:3.9-eclipse-temurin-17
@@ -113,9 +109,6 @@ build:springboot:
     - if: '$CI_COMMIT_BRANCH == "develop"'
     - if: '$CI_COMMIT_TAG'
 
-# ------------------------------------------------------------------------------
-# Node.js — package-lock.json out of sync → use npm install instead of npm ci
-# ------------------------------------------------------------------------------
 build:node:
   stage: build
   image: node:20-alpine
@@ -208,7 +201,7 @@ test:node:
 
 # ==============================================================================
 # STAGE 3 — PUSH
-# Build Docker images and push to GitLab Container Registry
+# Uses host Docker socket instead of dind (WSL compatible)
 # ==============================================================================
 
 push:frontend:
@@ -219,19 +212,11 @@ push:frontend:
     - docker
     - shell
     - efrei_project
-  services:
-    - name: docker:24-dind
-      alias: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2376
-    DOCKER_TLS_CERTDIR: "/certs"
-    DOCKER_CERT_PATH: "/certs/client"
-    DOCKER_TLS_VERIFY: "1"
   needs: ["build:frontend", "test:frontend"]
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY --username "$CI_REGISTRY_USER" --password-stdin
   script:
-    - docker build --cache-from "$IMAGE_FRONTEND:latest" --tag "$IMAGE_FRONTEND:$TAG" --tag "$IMAGE_FRONTEND:latest" ./student-project/frontend-nextjs
+    - docker build --tag "$IMAGE_FRONTEND:$TAG" --tag "$IMAGE_FRONTEND:latest" ./student-project/frontend-nextjs
     - docker push "$IMAGE_FRONTEND:$TAG"
     - docker push "$IMAGE_FRONTEND:latest"
   after_script:
@@ -249,19 +234,11 @@ push:dotnet:
     - docker
     - shell
     - efrei_project
-  services:
-    - name: docker:24-dind
-      alias: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2376
-    DOCKER_TLS_CERTDIR: "/certs"
-    DOCKER_CERT_PATH: "/certs/client"
-    DOCKER_TLS_VERIFY: "1"
   needs: ["build:dotnet"]
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY --username "$CI_REGISTRY_USER" --password-stdin
   script:
-    - docker build --cache-from "$IMAGE_DOTNET:latest" --tag "$IMAGE_DOTNET:$TAG" --tag "$IMAGE_DOTNET:latest" ./student-project/backend-csharp/StudentApi
+    - docker build --tag "$IMAGE_DOTNET:$TAG" --tag "$IMAGE_DOTNET:latest" ./student-project/backend-csharp/StudentApi
     - docker push "$IMAGE_DOTNET:$TAG"
     - docker push "$IMAGE_DOTNET:latest"
   after_script:
@@ -279,19 +256,11 @@ push:springboot:
     - docker
     - shell
     - efrei_project
-  services:
-    - name: docker:24-dind
-      alias: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2376
-    DOCKER_TLS_CERTDIR: "/certs"
-    DOCKER_CERT_PATH: "/certs/client"
-    DOCKER_TLS_VERIFY: "1"
   needs: ["build:springboot", "test:springboot"]
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY --username "$CI_REGISTRY_USER" --password-stdin
   script:
-    - docker build --cache-from "$IMAGE_SPRINGBOOT:latest" --tag "$IMAGE_SPRINGBOOT:$TAG" --tag "$IMAGE_SPRINGBOOT:latest" ./student-project/backend-springboot
+    - docker build --tag "$IMAGE_SPRINGBOOT:$TAG" --tag "$IMAGE_SPRINGBOOT:latest" ./student-project/backend-springboot
     - docker push "$IMAGE_SPRINGBOOT:$TAG"
     - docker push "$IMAGE_SPRINGBOOT:latest"
   after_script:
@@ -309,19 +278,11 @@ push:node:
     - docker
     - shell
     - efrei_project
-  services:
-    - name: docker:24-dind
-      alias: docker
-  variables:
-    DOCKER_HOST: tcp://docker:2376
-    DOCKER_TLS_CERTDIR: "/certs"
-    DOCKER_CERT_PATH: "/certs/client"
-    DOCKER_TLS_VERIFY: "1"
   needs: ["build:node", "test:node"]
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY --username "$CI_REGISTRY_USER" --password-stdin
   script:
-    - docker build --cache-from "$IMAGE_NODE:latest" --tag "$IMAGE_NODE:$TAG" --tag "$IMAGE_NODE:latest" ./student-project/backend-nodejs
+    - docker build --tag "$IMAGE_NODE:$TAG" --tag "$IMAGE_NODE:latest" ./student-project/backend-nodejs
     - docker push "$IMAGE_NODE:$TAG"
     - docker push "$IMAGE_NODE:latest"
   after_script:
@@ -354,8 +315,8 @@ deploy:dev:
   script:
     - echo "==> Deploying to DEV (frontend:3020 | node:4020 | dotnet:5020 | java:8100)"
     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY --username "$CI_REGISTRY_USER" --password-stdin
-    - docker-compose -f docker-compose.dev.yml pull
-    - docker-compose -f docker-compose.dev.yml up -d --force-recreate --remove-orphans
+    - docker compose -f docker-compose.dev.yml pull
+    - docker compose -f docker-compose.dev.yml up -d --force-recreate --remove-orphans
     - echo "==> DEV deployment complete"
   rules:
     - if: '$CI_COMMIT_BRANCH == "develop"'
@@ -374,8 +335,8 @@ deploy:uat:
   script:
     - echo "==> Deploying to UAT (frontend:3010 | node:4010 | dotnet:5010 | java:8090)"
     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY --username "$CI_REGISTRY_USER" --password-stdin
-    - docker-compose -f docker-compose.uat.yml pull
-    - docker-compose -f docker-compose.uat.yml up -d --force-recreate --remove-orphans
+    - docker compose -f docker-compose.uat.yml pull
+    - docker compose -f docker-compose.uat.yml up -d --force-recreate --remove-orphans
     - echo "==> UAT deployment complete"
   when: manual
   rules:
@@ -396,8 +357,8 @@ deploy:prd:docker-compose:
   script:
     - echo "==> Deploying to PRODUCTION via Docker Compose"
     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY --username "$CI_REGISTRY_USER" --password-stdin
-    - docker-compose -f docker-compose.yml pull
-    - docker-compose -f docker-compose.yml up -d --force-recreate --remove-orphans
+    - docker compose -f docker-compose.yml pull
+    - docker compose -f docker-compose.yml up -d --force-recreate --remove-orphans
     - sleep 20
     - curl --fail --silent --max-time 10 http://localhost:3000 || (echo "ERROR frontend" && exit 1)
     - curl --fail --silent --max-time 10 http://localhost:5000/api/students || (echo "ERROR dotnet" && exit 1)
