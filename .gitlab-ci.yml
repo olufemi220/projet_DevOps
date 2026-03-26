@@ -206,7 +206,7 @@ test:node:
 
 push:frontend:
   stage: push
-  image: docker:24
+  image: docker:27
   tags:
     - linux
     - docker
@@ -228,7 +228,7 @@ push:frontend:
 
 push:dotnet:
   stage: push
-  image: docker:24
+  image: docker:27
   tags:
     - linux
     - docker
@@ -250,7 +250,7 @@ push:dotnet:
 
 push:springboot:
   stage: push
-  image: docker:24
+  image: docker:27
   tags:
     - linux
     - docker
@@ -272,7 +272,7 @@ push:springboot:
 
 push:node:
   stage: push
-  image: docker:24
+  image: docker:27
   tags:
     - linux
     - docker
