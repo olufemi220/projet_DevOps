@@ -4,11 +4,11 @@
 # Description : Full CI/CD pipeline — Build, Test, Push, Deploy
 #               Multi-environment : DEV | UAT | PRD
 #
-# Folder structure :
-#   frontend-nextjs/      → Next.js frontend
-#   backend-charp/        → C# ASP.NET Core backend
-#   backend-springboot/   → Java Spring Boot backend
-#   backend-node/         → Node.js Express backend
+# Real folder structure :
+#   student-project/frontend-nextjs/          → Next.js frontend
+#   student-project/backend-csharp/StudentApi → C# ASP.NET Core
+#   student-project/backend-springboot/       → Java Spring Boot
+#   student-project/backend-nodejs/           → Node.js Express
 # ==============================================================================
 
 variables:
@@ -28,7 +28,6 @@ stages:
 
 # ==============================================================================
 # STAGE 1 — BUILD
-# All build jobs run on every push to main or develop (no rules:changes)
 # ==============================================================================
 
 build:frontend:
@@ -41,14 +40,14 @@ build:frontend:
     - efrei_project
   script:
     - echo "==> Installing dependencies for frontend"
-    - cd frontend-nextjs
+    - cd student-project/frontend-nextjs
     - npm ci --prefer-offline
     - echo "==> Building Next.js production bundle"
     - npm run build
   artifacts:
     paths:
-      - frontend-nextjs/.next/
-      - frontend-nextjs/node_modules/
+      - student-project/frontend-nextjs/.next/
+      - student-project/frontend-nextjs/node_modules/
     expire_in: 1 hour
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
@@ -65,7 +64,7 @@ build:dotnet:
     - efrei_project
   script:
     - echo "==> Restoring NuGet packages"
-    - cd backend-charp/StudentApi
+    - cd student-project/backend-csharp/StudentApi
     - dotnet restore
     - echo "==> Building C# project in Release mode"
     - dotnet build --configuration Release --no-restore
@@ -73,7 +72,7 @@ build:dotnet:
     - dotnet publish --configuration Release --no-build --output ./publish
   artifacts:
     paths:
-      - backend-charp/StudentApi/publish/
+      - student-project/backend-csharp/StudentApi/publish/
     expire_in: 1 hour
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
@@ -90,16 +89,16 @@ build:springboot:
     - efrei_project
   script:
     - echo "==> Building Spring Boot project with Maven"
-    - cd backend-springboot
+    - cd student-project/backend-springboot
     - mvn clean package -DskipTests --batch-mode
   artifacts:
     paths:
-      - backend-springboot/target/*.jar
+      - student-project/backend-springboot/target/*.jar
     expire_in: 1 hour
   cache:
     key: "$CI_COMMIT_REF_SLUG-maven"
     paths:
-      - backend-springboot/.m2/
+      - student-project/backend-springboot/.m2/
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_BRANCH == "develop"'
@@ -115,17 +114,17 @@ build:node:
     - efrei_project
   script:
     - echo "==> Installing dependencies for Node.js backend"
-    - cd backend-node
+    - cd student-project/backend-nodejs
     - npm ci --prefer-offline
     - echo "==> Node.js backend ready"
   artifacts:
     paths:
-      - backend-node/node_modules/
+      - student-project/backend-nodejs/node_modules/
     expire_in: 1 hour
   cache:
     key: "$CI_COMMIT_REF_SLUG-node"
     paths:
-      - backend-node/node_modules/
+      - student-project/backend-nodejs/node_modules/
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_BRANCH == "develop"'
@@ -146,7 +145,7 @@ test:frontend:
   needs: ["build:frontend"]
   script:
     - echo "==> Running ESLint on frontend code"
-    - cd frontend-nextjs
+    - cd student-project/frontend-nextjs
     - npm run lint
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
@@ -164,18 +163,18 @@ test:springboot:
   needs: ["build:springboot"]
   script:
     - echo "==> Running JUnit tests for Spring Boot"
-    - cd backend-springboot
+    - cd student-project/backend-springboot
     - mvn test --batch-mode
   artifacts:
     reports:
-      junit: backend-springboot/target/surefire-reports/TEST-*.xml
+      junit: student-project/backend-springboot/target/surefire-reports/TEST-*.xml
     paths:
-      - backend-springboot/target/surefire-reports/
+      - student-project/backend-springboot/target/surefire-reports/
     expire_in: 7 days
   cache:
     key: "$CI_COMMIT_REF_SLUG-maven"
     paths:
-      - backend-springboot/.m2/
+      - student-project/backend-springboot/.m2/
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_BRANCH == "develop"'
@@ -192,7 +191,7 @@ test:node:
   needs: ["build:node"]
   script:
     - echo "==> Running Node.js tests"
-    - cd backend-node
+    - cd student-project/backend-nodejs
     - npm test --if-present
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
@@ -224,7 +223,7 @@ push:frontend:
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY --username "$CI_REGISTRY_USER" --password-stdin
   script:
-    - docker build --cache-from "$IMAGE_FRONTEND:latest" --tag "$IMAGE_FRONTEND:$TAG" --tag "$IMAGE_FRONTEND:latest" ./frontend-nextjs
+    - docker build --cache-from "$IMAGE_FRONTEND:latest" --tag "$IMAGE_FRONTEND:$TAG" --tag "$IMAGE_FRONTEND:latest" ./student-project/frontend-nextjs
     - docker push "$IMAGE_FRONTEND:$TAG"
     - docker push "$IMAGE_FRONTEND:latest"
   after_script:
@@ -254,7 +253,7 @@ push:dotnet:
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY --username "$CI_REGISTRY_USER" --password-stdin
   script:
-    - docker build --cache-from "$IMAGE_DOTNET:latest" --tag "$IMAGE_DOTNET:$TAG" --tag "$IMAGE_DOTNET:latest" ./backend-charp/StudentApi
+    - docker build --cache-from "$IMAGE_DOTNET:latest" --tag "$IMAGE_DOTNET:$TAG" --tag "$IMAGE_DOTNET:latest" ./student-project/backend-csharp/StudentApi
     - docker push "$IMAGE_DOTNET:$TAG"
     - docker push "$IMAGE_DOTNET:latest"
   after_script:
@@ -284,7 +283,7 @@ push:springboot:
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY --username "$CI_REGISTRY_USER" --password-stdin
   script:
-    - docker build --cache-from "$IMAGE_SPRINGBOOT:latest" --tag "$IMAGE_SPRINGBOOT:$TAG" --tag "$IMAGE_SPRINGBOOT:latest" ./backend-springboot
+    - docker build --cache-from "$IMAGE_SPRINGBOOT:latest" --tag "$IMAGE_SPRINGBOOT:$TAG" --tag "$IMAGE_SPRINGBOOT:latest" ./student-project/backend-springboot
     - docker push "$IMAGE_SPRINGBOOT:$TAG"
     - docker push "$IMAGE_SPRINGBOOT:latest"
   after_script:
@@ -314,7 +313,7 @@ push:node:
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY --username "$CI_REGISTRY_USER" --password-stdin
   script:
-    - docker build --cache-from "$IMAGE_NODE:latest" --tag "$IMAGE_NODE:$TAG" --tag "$IMAGE_NODE:latest" ./backend-node
+    - docker build --cache-from "$IMAGE_NODE:latest" --tag "$IMAGE_NODE:$TAG" --tag "$IMAGE_NODE:latest" ./student-project/backend-nodejs
     - docker push "$IMAGE_NODE:$TAG"
     - docker push "$IMAGE_NODE:latest"
   after_script:
