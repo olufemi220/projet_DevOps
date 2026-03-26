@@ -5,7 +5,7 @@
 #               Multi-environment : DEV | UAT | PRD
 #
 # Real folder structure :
-#   student-project/frontend-nextjs/          → Next.js frontend
+#   student-project/frontend-nextjs/          → Next.js frontend  (needs Node 20+)
 #   student-project/backend-csharp/StudentApi → C# ASP.NET Core
 #   student-project/backend-springboot/       → Java Spring Boot
 #   student-project/backend-nodejs/           → Node.js Express
@@ -30,18 +30,21 @@ stages:
 # STAGE 1 — BUILD
 # ==============================================================================
 
+# ------------------------------------------------------------------------------
+# Frontend — Next.js 16 requires Node >= 20.9.0
+# ------------------------------------------------------------------------------
 build:frontend:
   stage: build
-  image: node:18-alpine
+  image: node:20-alpine
   tags:
     - linux
     - docker
     - shell
     - efrei_project
   script:
-    - echo "==> Installing dependencies for frontend"
+    - echo "==> Installing dependencies for frontend (Node 20)"
     - cd student-project/frontend-nextjs
-    - npm ci --prefer-offline
+    - npm install
     - echo "==> Building Next.js production bundle"
     - npm run build
   artifacts:
@@ -54,6 +57,9 @@ build:frontend:
     - if: '$CI_COMMIT_BRANCH == "develop"'
     - if: '$CI_COMMIT_TAG'
 
+# ------------------------------------------------------------------------------
+# C# — ASP.NET Core 7
+# ------------------------------------------------------------------------------
 build:dotnet:
   stage: build
   image: mcr.microsoft.com/dotnet/sdk:7.0
@@ -79,6 +85,9 @@ build:dotnet:
     - if: '$CI_COMMIT_BRANCH == "develop"'
     - if: '$CI_COMMIT_TAG'
 
+# ------------------------------------------------------------------------------
+# Java — Spring Boot 3.1 / Maven
+# ------------------------------------------------------------------------------
 build:springboot:
   stage: build
   image: maven:3.9-eclipse-temurin-17
@@ -104,9 +113,12 @@ build:springboot:
     - if: '$CI_COMMIT_BRANCH == "develop"'
     - if: '$CI_COMMIT_TAG'
 
+# ------------------------------------------------------------------------------
+# Node.js — package-lock.json out of sync → use npm install instead of npm ci
+# ------------------------------------------------------------------------------
 build:node:
   stage: build
-  image: node:18-alpine
+  image: node:20-alpine
   tags:
     - linux
     - docker
@@ -115,16 +127,12 @@ build:node:
   script:
     - echo "==> Installing dependencies for Node.js backend"
     - cd student-project/backend-nodejs
-    - npm ci --prefer-offline
+    - npm install
     - echo "==> Node.js backend ready"
   artifacts:
     paths:
       - student-project/backend-nodejs/node_modules/
     expire_in: 1 hour
-  cache:
-    key: "$CI_COMMIT_REF_SLUG-node"
-    paths:
-      - student-project/backend-nodejs/node_modules/
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_BRANCH == "develop"'
@@ -136,7 +144,7 @@ build:node:
 
 test:frontend:
   stage: test
-  image: node:18-alpine
+  image: node:20-alpine
   tags:
     - linux
     - docker
@@ -182,7 +190,7 @@ test:springboot:
 
 test:node:
   stage: test
-  image: node:18-alpine
+  image: node:20-alpine
   tags:
     - linux
     - docker
