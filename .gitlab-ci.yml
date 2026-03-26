@@ -3,22 +3,23 @@
 # Author : Group Project — EFREI 2025-2026
 # Description : Full CI/CD pipeline — Build, Test, Push, Deploy
 #               Multi-environment : DEV | UAT | PRD
+#
+# Folder structure :
+#   frontend-nextjs/      → Next.js frontend
+#   backend-charp/        → C# ASP.NET Core backend
+#   backend-springboot/   → Java Spring Boot backend
+#   backend-node/         → Node.js Express backend
 # ==============================================================================
 
 variables:
-  REGISTRY: $CI_REGISTRY
-  IMAGE_PREFIX: $CI_REGISTRY_IMAGE
-  IMAGE_FRONTEND: "$CI_REGISTRY_IMAGE/frontend"
-  IMAGE_DOTNET: "$CI_REGISTRY_IMAGE/backend-dotnet"
+  IMAGE_FRONTEND:   "$CI_REGISTRY_IMAGE/frontend"
+  IMAGE_DOTNET:     "$CI_REGISTRY_IMAGE/backend-dotnet"
   IMAGE_SPRINGBOOT: "$CI_REGISTRY_IMAGE/backend-springboot"
-  IMAGE_NODE: "$CI_REGISTRY_IMAGE/backend-node"
+  IMAGE_NODE:       "$CI_REGISTRY_IMAGE/backend-node"
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: "/certs"
   TAG: $CI_COMMIT_REF_SLUG
 
-# ---------------------------------------------------------------------------
-# Pipeline stages
-# ---------------------------------------------------------------------------
 stages:
   - build
   - test
@@ -27,6 +28,7 @@ stages:
 
 # ==============================================================================
 # STAGE 1 — BUILD
+# All build jobs run on every push to main or develop (no rules:changes)
 # ==============================================================================
 
 build:frontend:
@@ -39,22 +41,19 @@ build:frontend:
     - efrei_project
   script:
     - echo "==> Installing dependencies for frontend"
-    - cd frontend
+    - cd frontend-nextjs
     - npm ci --prefer-offline
     - echo "==> Building Next.js production bundle"
     - npm run build
   artifacts:
     paths:
-      - frontend/.next/
-      - frontend/node_modules/
+      - frontend-nextjs/.next/
+      - frontend-nextjs/node_modules/
     expire_in: 1 hour
-  cache:
-    key: "$CI_COMMIT_REF_SLUG-frontend"
-    paths:
-      - frontend/node_modules/
   rules:
-    - changes:
-        - frontend/**/*
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_COMMIT_TAG'
 
 build:dotnet:
   stage: build
@@ -66,7 +65,7 @@ build:dotnet:
     - efrei_project
   script:
     - echo "==> Restoring NuGet packages"
-    - cd backend-dotnet
+    - cd backend-charp/StudentApi
     - dotnet restore
     - echo "==> Building C# project in Release mode"
     - dotnet build --configuration Release --no-restore
@@ -74,11 +73,12 @@ build:dotnet:
     - dotnet publish --configuration Release --no-build --output ./publish
   artifacts:
     paths:
-      - backend-dotnet/publish/
+      - backend-charp/StudentApi/publish/
     expire_in: 1 hour
   rules:
-    - changes:
-        - backend-dotnet/**/*
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_COMMIT_TAG'
 
 build:springboot:
   stage: build
@@ -101,8 +101,9 @@ build:springboot:
     paths:
       - backend-springboot/.m2/
   rules:
-    - changes:
-        - backend-springboot/**/*
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_COMMIT_TAG'
 
 build:node:
   stage: build
@@ -126,8 +127,9 @@ build:node:
     paths:
       - backend-node/node_modules/
   rules:
-    - changes:
-        - backend-node/**/*
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_COMMIT_TAG'
 
 # ==============================================================================
 # STAGE 2 — TEST
@@ -144,11 +146,12 @@ test:frontend:
   needs: ["build:frontend"]
   script:
     - echo "==> Running ESLint on frontend code"
-    - cd frontend
+    - cd frontend-nextjs
     - npm run lint
   rules:
-    - changes:
-        - frontend/**/*
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_COMMIT_TAG'
 
 test:springboot:
   stage: test
@@ -174,8 +177,9 @@ test:springboot:
     paths:
       - backend-springboot/.m2/
   rules:
-    - changes:
-        - backend-springboot/**/*
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_COMMIT_TAG'
 
 test:node:
   stage: test
@@ -191,11 +195,13 @@ test:node:
     - cd backend-node
     - npm test --if-present
   rules:
-    - changes:
-        - backend-node/**/*
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_COMMIT_TAG'
 
 # ==============================================================================
 # STAGE 3 — PUSH
+# Build Docker images and push to GitLab Container Registry
 # ==============================================================================
 
 push:frontend:
@@ -218,7 +224,7 @@ push:frontend:
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY --username "$CI_REGISTRY_USER" --password-stdin
   script:
-    - docker build --cache-from "$IMAGE_FRONTEND:latest" --tag "$IMAGE_FRONTEND:$TAG" --tag "$IMAGE_FRONTEND:latest" ./frontend
+    - docker build --cache-from "$IMAGE_FRONTEND:latest" --tag "$IMAGE_FRONTEND:$TAG" --tag "$IMAGE_FRONTEND:latest" ./frontend-nextjs
     - docker push "$IMAGE_FRONTEND:$TAG"
     - docker push "$IMAGE_FRONTEND:latest"
   after_script:
@@ -248,7 +254,7 @@ push:dotnet:
   before_script:
     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY --username "$CI_REGISTRY_USER" --password-stdin
   script:
-    - docker build --cache-from "$IMAGE_DOTNET:latest" --tag "$IMAGE_DOTNET:$TAG" --tag "$IMAGE_DOTNET:latest" ./backend-dotnet
+    - docker build --cache-from "$IMAGE_DOTNET:latest" --tag "$IMAGE_DOTNET:$TAG" --tag "$IMAGE_DOTNET:latest" ./backend-charp/StudentApi
     - docker push "$IMAGE_DOTNET:$TAG"
     - docker push "$IMAGE_DOTNET:latest"
   after_script:
@@ -338,14 +344,11 @@ deploy:dev:
   environment:
     name: development
     url: http://localhost:3020
-  variables:
-    COMPOSE_FILE: "docker-compose.dev.yml"
-    DB_NAME: "StudentManagement_Dev"
   script:
     - echo "==> Deploying to DEV (frontend:3020 | node:4020 | dotnet:5020 | java:8100)"
     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY --username "$CI_REGISTRY_USER" --password-stdin
-    - docker-compose -f $COMPOSE_FILE pull
-    - docker-compose -f $COMPOSE_FILE up -d --force-recreate --remove-orphans
+    - docker-compose -f docker-compose.dev.yml pull
+    - docker-compose -f docker-compose.dev.yml up -d --force-recreate --remove-orphans
     - echo "==> DEV deployment complete"
   rules:
     - if: '$CI_COMMIT_BRANCH == "develop"'
@@ -361,14 +364,11 @@ deploy:uat:
   environment:
     name: uat
     url: http://localhost:3010
-  variables:
-    COMPOSE_FILE: "docker-compose.uat.yml"
-    DB_NAME: "StudentManagement_UAT"
   script:
     - echo "==> Deploying to UAT (frontend:3010 | node:4010 | dotnet:5010 | java:8090)"
     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY --username "$CI_REGISTRY_USER" --password-stdin
-    - docker-compose -f $COMPOSE_FILE pull
-    - docker-compose -f $COMPOSE_FILE up -d --force-recreate --remove-orphans
+    - docker-compose -f docker-compose.uat.yml pull
+    - docker-compose -f docker-compose.uat.yml up -d --force-recreate --remove-orphans
     - echo "==> UAT deployment complete"
   when: manual
   rules:
@@ -386,15 +386,11 @@ deploy:prd:docker-compose:
   environment:
     name: production
     url: http://localhost:3000
-  variables:
-    COMPOSE_FILE: "docker-compose.yml"
-    DB_NAME: "StudentManagement_PRD"
   script:
     - echo "==> Deploying to PRODUCTION via Docker Compose"
     - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY --username "$CI_REGISTRY_USER" --password-stdin
-    - docker-compose -f $COMPOSE_FILE pull
-    - docker-compose -f $COMPOSE_FILE up -d --force-recreate --remove-orphans
-    - echo "==> Waiting 20s for services to start..."
+    - docker-compose -f docker-compose.yml pull
+    - docker-compose -f docker-compose.yml up -d --force-recreate --remove-orphans
     - sleep 20
     - curl --fail --silent --max-time 10 http://localhost:3000 || (echo "ERROR frontend" && exit 1)
     - curl --fail --silent --max-time 10 http://localhost:5000/api/students || (echo "ERROR dotnet" && exit 1)
